@@ -12,10 +12,19 @@ const UiPalette palettes[]={
     {RGB(83,99,121),RGB(66,81,103),RGB(50,64,84),RGB(231,235,241),RGB(247,248,250),RGB(238,241,245),RGB(220,226,234)}
 };
 const UiPalette& palette(){return palettes[colorTheme];}
+COLORREF tint(COLORREF color,int amount){return RGB((GetRValue(color)*amount+255*(100-amount))/100,(GetGValue(color)*amount+255*(100-amount))/100,(GetBValue(color)*amount+255*(100-amount))/100);}
+COLORREF cardColor(){return tint(palette().accent,9);}
+COLORREF textColor(){return RGB(GetRValue(palette().pressed)/3,GetGValue(palette().pressed)/3,GetBValue(palette().pressed)/3);}
+void themeWindow(HWND h){
+    COLORREF caption=palette().selection,text=textColor();
+    DwmSetWindowAttribute(h,35,&caption,sizeof(caption));
+    DwmSetWindowAttribute(h,36,&text,sizeof(text));
+}
 void applyColorTheme(int index,bool save){
     colorTheme=index>=0&&index<7?index:0;
-    HBRUSH old=background;background=CreateSolidBrush(palette().canvas);
-    if(mainWindow){SetClassLongPtrW(mainWindow,GCLP_HBRBACKGROUND,reinterpret_cast<LONG_PTR>(background));RedrawWindow(mainWindow,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN);}
+    HBRUSH old=background;background=CreateSolidBrush(tint(palette().accent,18));
+    HBRUSH oldCard=cardBrush;cardBrush=CreateSolidBrush(cardColor());if(oldCard)DeleteObject(oldCard);
+    if(mainWindow){themeWindow(mainWindow);SetClassLongPtrW(mainWindow,GCLP_HBRBACKGROUND,reinterpret_cast<LONG_PTR>(background));RedrawWindow(mainWindow,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN|RDW_FRAME);}
     if(old)DeleteObject(old);
     if(save){auto value=std::to_wstring(colorTheme);WritePrivateProfileStringW(L"UI",L"ColorTheme",value.c_str(),iniPath.c_str());}
 }
@@ -39,17 +48,33 @@ LRESULT CALLBACK buttonHover(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR)
 void roundFill(HDC dc,RECT r,COLORREF fill,COLORREF edge,int radius){
     HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,edge);auto oldBrush=SelectObject(dc,b),oldPen=SelectObject(dc,p);RoundRect(dc,r.left,r.top,r.right,r.bottom,radius,radius);SelectObject(dc,oldBrush);SelectObject(dc,oldPen);DeleteObject(b);DeleteObject(p);
 }
+LRESULT CALLBACK themedControl(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR comboControl){
+    if(m==WM_ERASEBKGND){RECT r;GetClientRect(h,&r);FillRect(reinterpret_cast<HDC>(w),&r,background);return 1;}
+    if(m==WM_PAINT&&comboControl){
+        PAINTSTRUCT ps;HDC dc=BeginPaint(h,&ps);RECT r;GetClientRect(h,&r);
+        roundFill(dc,r,cardColor(),palette().edge,MulDiv(8,dpi,96));
+        RECT text=r;text.left+=MulDiv(8,dpi,96);text.right-=MulDiv(25,dpi,96);
+        wchar_t label[256]{};GetWindowTextW(h,label,256);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,textColor());auto oldFont=SelectObject(dc,font);
+        DrawTextW(dc,label,-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+        RECT arrow=r;arrow.left=arrow.right-MulDiv(24,dpi,96);DrawTextW(dc,L"⌄",-1,&arrow,DT_SINGLELINE|DT_CENTER|DT_VCENTER);
+        if(GetFocus()==h){InflateRect(&text,-2,-2);DrawFocusRect(dc,&text);}SelectObject(dc,oldFont);EndPaint(h,&ps);return 0;
+    }
+    auto result=DefSubclassProc(h,m,w,l);
+    if(comboControl&&(m==WM_SETFOCUS||m==WM_KILLFOCUS||m==CB_SETCURSEL||m==WM_ENABLE))InvalidateRect(h,nullptr,FALSE);
+    return result;
+}
 bool drawModernControl(DRAWITEMSTRUCT* item){
     if(!item)return false;HDC dc=item->hDC;RECT r=item->rcItem;
-    if(item->CtlType==ODT_LISTBOX){int saved=SaveDC(dc);bool selected=(item->itemState&ODS_SELECTED)!=0;HBRUSH b=CreateSolidBrush(selected?palette().selection:RGB(255,255,255));FillRect(dc,&r,b);DeleteObject(b);if(item->itemID<entries.size()){auto&e=entries[item->itemID];int iconSize=MulDiv(28,dpi,96),gap=MulDiv(10,dpi,96);if(e.icon)DrawIconEx(dc,r.left+gap,r.top+(r.bottom-r.top-iconSize)/2,e.icon,iconSize,iconSize,0,nullptr,DI_NORMAL);RECT text=r;text.left+=iconSize+2*gap;text.top+=MulDiv(3,dpi,96);text.bottom=text.top+MulDiv(23,dpi,96);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(31,52,82));SelectObject(dc,actionFont);DrawTextW(dc,e.exe.c_str(),-1,&text,DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);text.top+=MulDiv(21,dpi,96);text.bottom=r.bottom;SetTextColor(dc,RGB(99,116,138));SelectObject(dc,font);DrawTextW(dc,e.title.c_str(),-1,&text,DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);}if(item->itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(dc,&r);}RestoreDC(dc,saved);return true;}
+    if(item->CtlType==ODT_COMBOBOX){int saved=SaveDC(dc);bool selected=(item->itemState&ODS_SELECTED)!=0;HBRUSH brush=CreateSolidBrush(selected?palette().selection:cardColor());FillRect(dc,&r,brush);DeleteObject(brush);if(item->itemID!=static_cast<UINT>(-1)){wchar_t label[512]{};SendMessageW(item->hwndItem,CB_GETLBTEXT,item->itemID,reinterpret_cast<LPARAM>(label));r.left+=MulDiv(8,dpi,96);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,textColor());SelectObject(dc,font);DrawTextW(dc,label,-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);}RestoreDC(dc,saved);return true;}
+    if(item->CtlType==ODT_LISTBOX){int saved=SaveDC(dc);bool selected=(item->itemState&ODS_SELECTED)!=0;HBRUSH b=CreateSolidBrush(selected?palette().selection:cardColor());FillRect(dc,&r,b);DeleteObject(b);if(item->itemID<entries.size()){auto&e=entries[item->itemID];int iconSize=MulDiv(28,dpi,96),gap=MulDiv(10,dpi,96);if(e.icon)DrawIconEx(dc,r.left+gap,r.top+(r.bottom-r.top-iconSize)/2,e.icon,iconSize,iconSize,0,nullptr,DI_NORMAL);RECT text=r;text.left+=iconSize+2*gap;text.top+=MulDiv(3,dpi,96);text.bottom=text.top+MulDiv(23,dpi,96);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,textColor());SelectObject(dc,actionFont);DrawTextW(dc,e.exe.c_str(),-1,&text,DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);text.top+=MulDiv(21,dpi,96);text.bottom=r.bottom;SetTextColor(dc,palette().pressed);SelectObject(dc,font);DrawTextW(dc,e.title.c_str(),-1,&text,DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);}if(item->itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(dc,&r);}RestoreDC(dc,saved);return true;}
     bool tab=item->CtlType==ODT_TAB;if(!tab&&item->CtlType!=ODT_BUTTON)return false;int saved=SaveDC(dc);
     bool primary=tab?(int)item->itemID==(item->hwndItem==settingsTabs?settingsPage:currentPage):(item->CtlID==Apply||item->CtlID==NativeApply);
     if(!tab){if(item->CtlID==VolumeOn)primary=volumeOn;if(item->CtlID==VolumeOff)primary=!volumeOn;if(item->CtlID==BrightnessOn)primary=brightnessOn;if(item->CtlID==BrightnessOff)primary=!brightnessOn;}
     bool disabled=(item->itemState&ODS_DISABLED)!=0,pressed=(item->itemState&ODS_SELECTED)!=0,hover=GetPropW(item->hwndItem,L"LG.Hover")!=nullptr;
-    HBRUSH base=CreateSolidBrush(tab?palette().canvas:RGB(255,255,255));FillRect(dc,&r,base);DeleteObject(base);InflateRect(&r,-2,-2);
+    HBRUSH base=CreateSolidBrush(tab?tint(palette().accent,18):cardColor());FillRect(dc,&r,base);DeleteObject(base);InflateRect(&r,-2,-2);
     COLORREF fill=primary?palette().accent:palette().surface,edge=primary?palette().accent:palette().edge;
-    if(hover&&!disabled){fill=primary?palette().hover:palette().selection;edge=primary?fill:RGB(187,204,229);}if(pressed&&!disabled)fill=primary?palette().pressed:palette().selection;if(disabled)fill=edge=RGB(239,241,245);
-    roundFill(dc,r,fill,edge,MulDiv(14,dpi,96));SetBkMode(dc,TRANSPARENT);SetTextColor(dc,disabled?RGB(153,164,180):primary?RGB(255,255,255):RGB(43,61,85));SelectObject(dc,actionFont?actionFont:font);
+    if(hover&&!disabled){fill=primary?palette().hover:palette().selection;edge=primary?fill:palette().accent;}if(pressed&&!disabled)fill=primary?palette().pressed:palette().selection;if(disabled)fill=edge=RGB(239,241,245);
+    roundFill(dc,r,fill,edge,MulDiv(14,dpi,96));SetBkMode(dc,TRANSPARENT);SetTextColor(dc,disabled?RGB(153,164,180):primary?RGB(255,255,255):textColor());SelectObject(dc,actionFont?actionFont:font);
     wchar_t text[256]{};if(tab){TCITEMW entry{};entry.mask=TCIF_TEXT;entry.pszText=text;entry.cchTextMax=256;TabCtrl_GetItem(item->hwndItem,(int)item->itemID,&entry);}else GetWindowTextW(item->hwndItem,text,256);
     if(pressed)OffsetRect(&r,0,1);DrawTextW(dc,text,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);
     if((item->itemState&ODS_FOCUS)&&!tab){InflateRect(&r,-5,-5);DrawFocusRect(dc,&r);}RestoreDC(dc,saved);return true;
@@ -57,7 +82,7 @@ bool drawModernControl(DRAWITEMSTRUCT* item){
 void paintChrome(HWND h){
     PAINTSTRUCT ps;HDC output=BeginPaint(h,&ps);RECT r;GetClientRect(h,&r);if(r.right<=0||r.bottom<=0){EndPaint(h,&ps);return;}
     HDC dc=CreateCompatibleDC(output);HBITMAP bitmap=CreateCompatibleBitmap(output,r.right,r.bottom);auto old=SelectObject(dc,bitmap);FillRect(dc,&r,background);
-    auto px=[](int v){return MulDiv(v,dpi,96);};RECT card={px(16),px(96),r.right-px(16),px(544)};roundFill(dc,card,RGB(255,255,255),palette().edge,px(22));
+    auto px=[](int v){return MulDiv(v,dpi,96);};RECT card={px(16),px(96),r.right-px(16),px(544)};roundFill(dc,card,cardColor(),palette().edge,px(22));
     HICON icon=(HICON)GetClassLongPtrW(h,GCLP_HICON);if(icon)DrawIconEx(dc,px(24),px(17),icon,px(32),px(32),0,nullptr,DI_NORMAL);
     BitBlt(output,0,0,r.right,r.bottom,dc,0,0,SRCCOPY);SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);EndPaint(h,&ps);
 }

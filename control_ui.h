@@ -10,7 +10,7 @@ void fitTabItems(HWND tab){
     InvalidateRect(tab,nullptr,TRUE);
 }
 void localize(){
-    SetWindowTextW(mainWindow,tr(L"Liquid Glass · v0.9.1",L"Liquid Glass · v0.9.1"));
+    SetWindowTextW(mainWindow,tr(L"Liquid Glass · v0.9.2",L"Liquid Glass · v0.9.2"));
     struct Text{int id;const wchar_t*zh;const wchar_t*en;};
     const Text texts[]={
       {Header,L"Liquid Glass",L"Liquid Glass"},{Refresh,L"刷新窗口",L"Refresh windows"},{Apply,L"应用",L"Apply"},{Restore,L"还原",L"Restore"},{Pause,L"隐藏至托盘",L"Hide to tray"},
@@ -22,7 +22,7 @@ void localize(){
       {SettingsNote,L"语言、配色和启动动画偏好自动保存。\r\n关闭设置窗口会继续在托盘运行。",L"Language, color and startup animation preferences are saved automatically.\r\nClosing settings keeps the app running in the tray."},
       {MotionText,L"程序启动\r\n180 毫秒淡入与轻移，只播放一次，结束后停止定时器。\r\n\r\n原生音量与亮度提示\r\n使用 XAML 入场与重定位过渡，触发取决于 Windows 控件生命周期。\r\n连续按键时的数值动画仍由系统控制。两种动画都遵循系统减少动画设置。",L"App startup\r\nA 180 ms fade/slide runs once, then its timer stops.\r\n\r\nNative volume and brightness\r\nXAML entrance/reposition transitions depend on the shell control lifecycle.\r\nWindows still controls numeric animation during repeated key presses.\r\nBoth animations respect the system's reduced-motion preference."},
       {CompatText,L"资源管理器：需要已安装并启用 File Explorer Styler。\r\n其他应用：外框材质可以尝试，不保证不透明内容区变玻璃。\r\n\r\n原生音量与亮度：使用 Taskbar Styler 的提示条控件，不切换任务栏主题。\r\nOn 为玻璃，单项 Off 为普通不透明背景；两项都 Off 时恢复原配置。\r\n改变原生提示条样式需要管理员授权。",L"Explorer requires installed, enabled File Explorer Styler.\r\nOther apps can try frame materials; opaque content may remain unchanged.\r\n\r\nNative indicators use Taskbar Styler without switching the taskbar theme.\r\nOn uses glass; individual Off uses an opaque background. Both Off restores originals.\r\nChanging native indicator styles requires administrator approval."},
-      {AboutText,L"Liquid Glass 0.9.1\r\n原生 Windows 应用，桌面 EXE、窗口和托盘使用统一图标。\r\n\r\n窗口事件合并处理，已应用材质有缓存。界面不持续重绘。\r\n不接管媒体键、不改变实际音量与亮度，不修改任务栏位置和大小。\r\n效果尚不包含完整光学折射。",L"Liquid Glass 0.9.1\r\nNative Windows app with one icon for the EXE, window and tray.\r\n\r\nWindow events are coalesced; applied materials and app icons are cached.\r\nNo continuous idle repainting, media-key interception or actual level changes.\r\nTaskbar position/size stay intact. Full optical refraction is not implemented."},
+      {AboutText,L"Liquid Glass 0.9.2\r\n原生 Windows 应用，桌面 EXE、窗口和托盘使用统一图标。\r\n\r\n窗口事件合并处理，已应用材质有缓存。界面不持续重绘。\r\n不接管媒体键、不改变实际音量与亮度，不修改任务栏位置和大小。\r\n效果尚不包含完整光学折射。",L"Liquid Glass 0.9.2\r\nNative Windows app with one icon for the EXE, window and tray.\r\n\r\nWindow events are coalesced; applied materials and app icons are cached.\r\nNo continuous idle repainting, media-key interception or actual level changes.\r\nTaskbar position/size stay intact. Full optical refraction is not implemented."},
       {ExitApp,L"还原并退出",L"Restore and exit"}
     };
     for(auto&t:texts)SetWindowTextW(GetDlgItem(mainWindow,t.id),tr(t.zh,t.en));
@@ -40,8 +40,9 @@ void localize(){
 }
 HWND control(const wchar_t*cls,const wchar_t*text,DWORD style,int id,int x,int y,int w,int h){
     if(_wcsicmp(cls,L"BUTTON")==0&&((style&BS_TYPEMASK)==BS_PUSHBUTTON||(style&BS_TYPEMASK)==BS_DEFPUSHBUTTON))style=(style&~BS_TYPEMASK)|BS_OWNERDRAW;
+    if(_wcsicmp(cls,L"COMBOBOX")==0)style|=CBS_OWNERDRAWFIXED|CBS_HASSTRINGS;
     auto px=[](int a){return MulDiv(a,dpi,96);};HWND result=CreateWindowExW(0,cls,text,WS_CHILD|WS_VISIBLE|style,px(x),px(y),px(w),px(h),mainWindow,reinterpret_cast<HMENU>((INT_PTR)id),GetModuleHandleW(nullptr),nullptr);
-    SendMessageW(result,WM_SETFONT,reinterpret_cast<WPARAM>(id==Header?headingFont:font),TRUE);SetWindowTheme(result,L"Explorer",nullptr);if(_wcsicmp(cls,L"BUTTON")==0&&(style&BS_TYPEMASK)==BS_OWNERDRAW)SetWindowSubclass(result,buttonHover,1,0);if(buildingPage>=0)pageControls[buildingPage].push_back(result);if(buildingSettings>=0)settingsControls[buildingSettings].push_back(result);return result;
+    SendMessageW(result,WM_SETFONT,reinterpret_cast<WPARAM>(id==Header?headingFont:font),TRUE);SetWindowTheme(result,L"Explorer",nullptr);if(_wcsicmp(cls,L"COMBOBOX")==0){SetWindowSubclass(result,themedControl,2,1);SendMessageW(result,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),px(23));SendMessageW(result,CB_SETITEMHEIGHT,0,px(26));}if(_wcsicmp(cls,WC_TABCONTROLW)==0)SetWindowSubclass(result,themedControl,2,0);if(_wcsicmp(cls,L"BUTTON")==0&&(style&BS_TYPEMASK)==BS_OWNERDRAW)SetWindowSubclass(result,buttonHover,1,0);if(buildingPage>=0)pageControls[buildingPage].push_back(result);if(buildingSettings>=0)settingsControls[buildingSettings].push_back(result);return result;
 }
 void tabItem(HWND tab,int count,int){for(int i=0;i<count;++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=const_cast<wchar_t*>(L" ");TabCtrl_InsertItem(tab,i,&item);}fitTabItems(tab);}
 void buildUI(){

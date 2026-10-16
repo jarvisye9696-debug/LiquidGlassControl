@@ -2,7 +2,7 @@
 
 Glass-style controls for **Windows 11 x64** · **Windows 11 x64** 玻璃效果工具
 
-**[Download ZIP / 下载免安装包](https://github.com/jarvisye9696-debug/LiquidGlassControl/releases/download/v0.9.1/LiquidGlassControl-0.9.1-win11-x64.zip)** · [EXE](https://github.com/jarvisye9696-debug/LiquidGlassControl/releases/download/v0.9.1/LiquidGlassControl-0.9.1-win11-x64.exe) · [Releases / 版本说明](https://github.com/jarvisye9696-debug/LiquidGlassControl/releases)
+**[Download ZIP / 下载免安装包](https://github.com/jarvisyip9696/LiquidGlassControl/releases/download/v0.9.2/LiquidGlassControl-0.9.2-win11-x64.zip)** · [EXE](https://github.com/jarvisyip9696/LiquidGlassControl/releases/download/v0.9.2/LiquidGlassControl-0.9.2-win11-x64.exe) · [Releases / 版本说明](https://github.com/jarvisyip9696/LiquidGlassControl/releases)
 
 ## English
 
