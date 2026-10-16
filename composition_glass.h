@@ -58,13 +58,13 @@ template<class Compositor>auto makeGlass(Compositor const&compositor,glass::Conf
 struct SystemBrush:winrt::Windows::UI::Xaml::Media::XamlCompositionBrushBaseT<SystemBrush>{
     winrt::Windows::UI::Composition::Compositor compositor{nullptr};glass::Config config;std::function<void(HRESULT)> completed;
     SystemBrush(winrt::Windows::UI::Xaml::UIElement const&e,glass::Config c,std::function<void(HRESULT)> callback):compositor(winrt::Windows::UI::Xaml::Hosting::ElementCompositionPreview::GetElementVisual(e).Compositor()),config(c),completed(std::move(callback)){FallbackColor(c.tint==2?winrt::Windows::UI::Color{255,24,32,44}:winrt::Windows::UI::Color{255,244,247,252});}
-    void OnConnected(){try{if(!CompositionBrush())CompositionBrush(config.economy?compositor.CreateColorBrush(FallbackColor()).as<winrt::Windows::UI::Composition::CompositionBrush>():makeGlass(compositor,config).as<winrt::Windows::UI::Composition::CompositionBrush>());completed(S_OK);}catch(...){completed(winrt::to_hresult());CompositionBrush(compositor.CreateColorBrush(FallbackColor()));}}
+    void OnConnected(){try{if(!CompositionBrush())CompositionBrush(config.economy?compositor.CreateColorBrush(FallbackColor()).as<winrt::Windows::UI::Composition::CompositionBrush>():makeGlass(compositor,config).as<winrt::Windows::UI::Composition::CompositionBrush>());completed(config.economy?S_FALSE:S_OK);}catch(...){completed(winrt::to_hresult());CompositionBrush(compositor.CreateColorBrush(FallbackColor()));}}
     void OnDisconnected(){CompositionBrush(nullptr);}
 };
 struct ModernBrush:winrt::Microsoft::UI::Xaml::Media::XamlCompositionBrushBaseT<ModernBrush>{
     winrt::Microsoft::UI::Composition::Compositor compositor{nullptr};glass::Config config;std::function<void(HRESULT)> completed;
     ModernBrush(winrt::Microsoft::UI::Xaml::UIElement const&e,glass::Config c,std::function<void(HRESULT)> callback):compositor(winrt::Microsoft::UI::Xaml::Hosting::ElementCompositionPreview::GetElementVisual(e).Compositor()),config(c),completed(std::move(callback)){FallbackColor(c.tint==2?winrt::Windows::UI::Color{255,24,32,44}:winrt::Windows::UI::Color{255,244,247,252});}
-    void OnConnected(){try{if(!CompositionBrush())CompositionBrush(config.economy?compositor.CreateColorBrush(FallbackColor()).as<winrt::Microsoft::UI::Composition::CompositionBrush>():makeGlass(compositor,config).as<winrt::Microsoft::UI::Composition::CompositionBrush>());completed(S_OK);}catch(...){completed(winrt::to_hresult());CompositionBrush(compositor.CreateColorBrush(FallbackColor()));}}
+    void OnConnected(){try{if(!CompositionBrush())CompositionBrush(config.economy?compositor.CreateColorBrush(FallbackColor()).as<winrt::Microsoft::UI::Composition::CompositionBrush>():makeGlass(compositor,config).as<winrt::Microsoft::UI::Composition::CompositionBrush>());completed(config.economy?S_FALSE:S_OK);}catch(...){completed(winrt::to_hresult());CompositionBrush(compositor.CreateColorBrush(FallbackColor()));}}
     void OnDisconnected(){CompositionBrush(nullptr);}
 };
 }

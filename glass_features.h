@@ -28,7 +28,7 @@ void pollMigration(){
 void applyGlass(bool discover){
     if(!engineReady||migrationJob||migrationNeeded()){updateNativeInfo();return;}
     glassConfig.features=(volumeOn?glass::Volume:0)|(brightnessOn?glass::Brightness:0)|(shellOn[0]?glass::Taskbar:0)|(shellOn[1]?glass::Start:0)|(shellOn[2]?glass::Notifications:0)|(explorerOn?glass::Explorer:0)|(dockOn?glass::Dock:0);
-    confirmedMaterials&=glassConfig.features;failedMaterials=0;KillTimer(mainWindow,6);
+    fallbackMaterials&=glassConfig.features;confirmedMaterials&=glassConfig.features;failedMaterials=0;KillTimer(mainWindow,6);
     SYSTEM_POWER_STATUS power{};GetSystemPowerStatus(&power);glassConfig.economy=batteryFriendly&&(power.ACLineStatus==0||power.SystemStatusFlag==1);
     auto effective=glassConfig;HIGHCONTRASTW high{};high.cbSize=sizeof(high);if(SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(high),&high,0)&&(high.dwFlags&HCF_HIGHCONTRASTON))effective.features=0;
     if(!effective.tint){DWORD light=1,size=4;RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);effective.tint=light?1:2;}

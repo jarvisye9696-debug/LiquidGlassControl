@@ -43,7 +43,7 @@ HWINEVENTHOOK windowEvents{};unsigned attributeWrites=0;
 bool volumeOn=false,brightnessOn=false,startupAnimation=true,startupPlayed=false;ULONGLONG startupTime=0;RECT startupRect{};
 HWND settingsTabs{};int settingsPage=0,buildingSettings=-1;std::vector<HWND> settingsControls[5];std::map<std::wstring,HICON> appIcons;
 glass::Controller engine;glass::Config glassConfig;bool explorerOn=false,dockOn=false,autoHideOn=false,batteryFriendly=true;taskbar_hide::Controller autoHide;HANDLE migrationJob{};HPOWERNOTIFY powerNotification{},acNotification{};bool engineReady=false;
-DWORD confirmedMaterials=0,failedMaterials=0,pausedFeatures=0;
+DWORD confirmedMaterials=0,failedMaterials=0,pausedFeatures=0,fallbackMaterials=0;
 constexpr GUID PowerSavingStatus={0xe00958c0,0xc213,0x4ace,{0xac,0x77,0xfe,0xcc,0xed,0x2e,0xee,0xa5}};
 void applyGlass(bool discover=true);
 void updateEffectLabels();
@@ -82,7 +82,7 @@ void updateNativeInfo(){
     int ids[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle};bool states[]={volumeOn,brightnessOn,shellOn[0],shellOn[1],shellOn[2],explorerOn,dockOn};
     for(int i=0;i<7;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&engineReady&&!migrationNeeded());InvalidateRect(h,nullptr,FALSE);}
     int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading};const wchar_t*zh[]={L"音量提示",L"亮度提示",L"任务栏",L"开始菜单",L"通知中心与日历",L"资源管理器",L"Dock 悬停动画"};const wchar_t*en[]={L"Volume indicator",L"Brightness indicator",L"Taskbar",L"Start menu",L"Notification center and calendar",L"File Explorer",L"Dock hover animation"};
-    for(int i=0;i<7;++i){DWORD bit=1u<<i;std::wstring text=tr(zh[i],en[i]);if(states[i])text+=(pausedFeatures&bit)?tr(L" · 已暂停",L" · Paused"):(failedMaterials&bit)?tr(L" · 未生效",L" · Not applied"):(confirmedMaterials&bit)?tr(L" · 已连接",L" · Connected"):tr(L" · 等待连接",L" · Connecting");SetWindowTextW(GetDlgItem(mainWindow,headings[i]),text.c_str());}
+    for(int i=0;i<7;++i){DWORD bit=1u<<i;std::wstring text=tr(zh[i],en[i]);if(states[i])text+=(pausedFeatures&bit)?tr(L" · 已暂停",L" · Paused"):(failedMaterials&bit)?tr(L" · 未生效",L" · Not applied"):(fallbackMaterials&bit)?tr(L" · 回退材质",L" · Fallback"):(confirmedMaterials&bit)?tr(L" · 已连接",L" · Connected"):tr(L" · 等待连接",L" · Connecting");SetWindowTextW(GetDlgItem(mainWindow,headings[i]),text.c_str());}
     SendMessageW(GetDlgItem(mainWindow,AutoHideToggle),BM_SETCHECK,autoHideOn?BST_CHECKED:BST_UNCHECKED,0);
     for(int id:{TaskbarHint,StartHint,NotificationHint})SetWindowTextW(GetDlgItem(mainWindow,id),L"");
 }
@@ -292,7 +292,7 @@ void show(){
 void menu(){HMENU m=CreatePopupMenu();AppendMenuW(m,MF_STRING,1,tr(L"打开设置",L"Open settings"));AppendMenuW(m,MF_STRING,2,tr(L"还原",L"Restore"));AppendMenuW(m,MF_STRING,3,tr(L"还原并退出",L"Restore and exit"));POINT p;GetCursorPos(&p);SetForegroundWindow(mainWindow);int n=TrackPopupMenu(m,TPM_RETURNCMD|TPM_RIGHTBUTTON,p.x,p.y,0,mainWindow,nullptr);DestroyMenu(m);if(n==1)show();if(n==2)restoreAll();if(n==3)restoreAll(true);PostMessageW(mainWindow,WM_NULL,0,0);}
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
     static UINT attachAck=RegisterWindowMessageW(glass::AttachAckMessage);if(msg==attachAck){engine.acknowledge((DWORD)w);return 0;}
-    static UINT engineStatus=RegisterWindowMessageW(glass::StatusMessage);if(msg==engineStatus){DWORD flags=(DWORD)w&glassConfig.features&~pausedFeatures;if(FAILED((HRESULT)l)){failedMaterials|=flags;confirmedMaterials&=~flags;message(tr(L"部分系统材质未生效，请查看各项连接状态。",L"Some shell materials were not applied. Check each connection status."));}else{confirmedMaterials|=flags;failedMaterials&=~flags;message(tr(L"系统材质属性已写入，请查看对应区域的外观。",L"Shell material properties written. Check the selected surface appearance."));}updateNativeInfo();return 0;}
+    static UINT engineStatus=RegisterWindowMessageW(glass::StatusMessage);if(msg==engineStatus){DWORD flags=(DWORD)w&glassConfig.features&~pausedFeatures;if(!flags)return 0;if(FAILED((HRESULT)l)){failedMaterials|=flags;confirmedMaterials&=~flags;message(tr(L"部分系统材质未生效，请查看各项连接状态。",L"Some shell materials were not applied. Check each connection status."));}else{confirmedMaterials|=flags;failedMaterials&=~flags;if((HRESULT)l==S_FALSE)fallbackMaterials|=flags;else fallbackMaterials&=~flags;message(tr(L"系统材质属性已写入，请查看对应区域的外观。",L"Shell material properties written. Check the selected surface appearance."));}updateNativeInfo();return 0;}
     static UINT restart=RegisterWindowMessageW(L"TaskbarCreated");if(msg==restart){Shell_NotifyIconW(NIM_ADD,&tray);Shell_NotifyIconW(NIM_SETVERSION,&tray);if(glassConfig.features)engine.discover();return 0;}
     switch(msg){
     case WM_PAINT:paintChrome(h);return 0;
