@@ -1,6 +1,8 @@
 # Liquid Glass Control v0.9
 
-Development status: private collaboration; no open-source license has been selected. See [Contributing](CONTRIBUTING.md) for building, testing and pull requests, and [Releasing](RELEASING.md) for draft releases. 中文协作流程见贡献说明。
+Development status: public preview; no open-source license has been selected. See [Contributing](CONTRIBUTING.md) for building, testing and pull requests, and [Releasing](RELEASING.md) for draft releases. 中文协作流程见贡献说明。
+
+**Download / 下载：** [v0.9 portable ZIP](https://github.com/jarvisye9696-debug/LiquidGlassControl/releases/download/v0.9/LiquidGlassControl-0.9-win11-x64.zip) · [Standalone EXE](https://github.com/jarvisye9696-debug/LiquidGlassControl/releases/download/v0.9/LiquidGlassControl-0.9-win11-x64.exe) · [Release notes](https://github.com/jarvisye9696-debug/LiquidGlassControl/releases/tag/v0.9). Windows 11 x64; extract the ZIP before running.
 
 Native Windows application with app background controls, independent styling switches for the native volume/brightness indicators, and Chinese/English UI. Run the desktop **Liquid Glass Control** shortcut or `build/LiquidGlassControl.exe`.
 

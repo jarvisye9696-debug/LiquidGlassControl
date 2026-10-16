@@ -1,6 +1,6 @@
 # Releasing / 发布
 
-The repository is private and has no selected license. Releases remain private to repository readers. Do not change repository visibility without agreeing with the other maintainer.
+The repository and v0.9 preview downloads are public. No open-source license has been selected. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
 2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.

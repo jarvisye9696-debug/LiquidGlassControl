@@ -1,8 +1,8 @@
 # Contributing / 参与开发
 
-This repository is currently private and has no open-source license. Repository access does not grant a general permission to redistribute the project. Agree on a license before a public release.
+This repository is public and has no selected open-source license. See the README for the published preview downloads. Maintainers still need to agree on an open-source license.
 
-仓库目前为私有，暂未选择开源许可证。公开发布前，请维护者一起确认许可证与发布范围。
+仓库和预览版下载已公开，暂未选择开源许可证。下载入口见 README，许可证由维护者另行确认。
 
 ## Work together
 
