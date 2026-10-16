@@ -40,6 +40,12 @@ inline std::vector<Value> load(const std::wstring&file,int kind,DWORD&first){
         CloseHandle(h);return values;
     }catch(...){CloseHandle(h);throw;}
 }
+inline bool configured(int kind,const std::wstring&dir){
+    try{if(!exists(kind,dir))return false;DWORD first=0;load(dir+surface(kind).journal,kind,first);Key root,settings;
+        if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,keyPath(kind).c_str(),0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&root.h)!=ERROR_SUCCESS||RegOpenKeyExW(root.h,L"Settings",0,KEY_QUERY_VALUE,&settings.h)!=ERROR_SUCCESS)return false;
+        auto desired=fields(kind,first);return equal(read(settings.h,desired[0].name),desired[0]);
+    }catch(...){return false;}
+}
 inline bool slotVacant(HKEY settings,DWORD index){
     auto prefix=L"controlStyles["+std::to_wstring(index)+L"].";
     for(DWORD i=0;;++i){wchar_t name[16384]{};DWORD n=_countof(name);LONG result=RegEnumValueW(settings,i,name,&n,nullptr,nullptr,nullptr,nullptr);
@@ -61,12 +67,12 @@ inline int apply(HKEY root,HKEY settings,int kind,bool on,const std::wstring&dir
         }
         auto desired=fields(kind,first);
         // Another tool may have edited our slots. Preserve its work and the recovery file.
-        for(size_t i=0;i<desired.size();++i){auto actual=read(settings,desired[i].name);if(!equal(actual,desired[i])&&!equal(actual,originals[i]))return 8;}
-        auto&values=on?desired:originals;
+        for(size_t i=0;i<desired.size();++i){auto actual=read(settings,desired[i].name);DWORD slot=0;bool placeholder=style_slots::targetName(actual.name,slot)&&style_slots::inactive(actual);if(!equal(actual,desired[i])&&!equal(actual,originals[i])&&!placeholder)return 8;}
+        bool deferred=false;auto values=on?desired:style_slots::restoration(settings,originals,deferred);
         for(auto&v:values)write(settings,v);
         for(auto&v:values)if(!equal(read(settings,v.name),v))return 5;
         explorer_background::notify(root);
-        if(!on&&!DeleteFileW(file.c_str()))return 4;
+        if(!on&&!deferred&&!DeleteFileW(file.c_str()))return 4;
         return 0;
     }catch(...){return 6;}
 }
@@ -77,4 +83,20 @@ inline int run(int kind,bool on,const std::wstring&dir){
         return apply(root.h,settings.h,kind,on,dir);
     }catch(...){return 6;}
 }
+inline int cleanupTaskbar(const std::wstring&dir){
+    try{
+        if(configured(0,dir))return 0;
+        Key root,settings;
+        bool plate=GetFileAttributesW((dir+L"native-osd-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES,children=GetFileAttributesW((dir+L"native-osd-switches.bin").c_str())!=INVALID_FILE_ATTRIBUTES;
+        if(plate||children){
+            if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,native_osd::Root,0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&root.h)!=ERROR_SUCCESS||RegOpenKeyExW(root.h,L"Settings",0,KEY_QUERY_VALUE,&settings.h)!=ERROR_SUCCESS)return 3;
+            if(plate){DWORD index=0;native_osd::load(dir+L"native-osd-originals.bin",index);auto desired=native_osd::desired(index);if(equal(read(settings.h,desired[0].name),desired[0]))return 0;}
+            if(children){DWORD a=0,b=0;native_switches::load(dir+L"native-osd-switches.bin",a,b);auto desired=native_switches::fields(a,b,0);for(int i:{0,3})if(equal(read(settings.h,desired[i].name),desired[i]))return 0;}
+            int code=native_switches::run(0,false,dir);if(code)return code;
+        }
+        return run(0,false,dir);
+    }catch(...){return 6;}
+}
+inline int nativeOperation(int mask,bool motion,const std::wstring&dir){int code=native_switches::run(mask,motion,dir);return code?code:cleanupTaskbar(dir);}
+inline int operation(int kind,bool on,const std::wstring&dir){int code=run(kind,on,dir);return code||kind!=0?code:cleanupTaskbar(dir);}
 }

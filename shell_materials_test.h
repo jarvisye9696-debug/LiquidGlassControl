@@ -30,6 +30,23 @@ inline bool regressionTest(const std::wstring&base){
             passed=(apply(root.h,settings.h,kind,false,dir)==0)&&sameSnapshot(before)&&!exists(kind,dir)&&passed;
             passed=(apply(root.h,settings.h,kind,false,dir)==0)&&passed;
         }
+        // Taskbar first, native indicators later: switching taskbar Off must not truncate them.
+        passed=(apply(root.h,settings.h,0,true,dir)==0)&&passed;
+        auto laterTarget=string(L"controlStyles[2].target",L"Grid#VolumeConfirmator");auto laterStyle=string(L"controlStyles[2].styles[0]",L"Background=Transparent");write(settings.h,laterTarget);write(settings.h,laterStyle);
+        passed=(apply(root.h,settings.h,0,false,dir)==0)&&exists(0,dir)&&style_slots::inactive(read(settings.h,L"controlStyles[1].target"))&&equal(read(settings.h,laterTarget.name),laterTarget)&&passed;
+        passed=(apply(root.h,settings.h,0,true,dir)==0)&&passed;
+        passed=(apply(root.h,settings.h,0,false,dir)==0)&&passed;
+        RegDeleteValueW(settings.h,laterTarget.name.c_str());RegDeleteValueW(settings.h,laterStyle.name.c_str());
+        passed=(apply(root.h,settings.h,0,false,dir)==0)&&sameSnapshot(before)&&!exists(0,dir)&&passed;
+        // Native indicators first, taskbar later: restoring the native slots preserves taskbar.
+        std::vector<Value> nativeOriginals;
+        for(int slot:{1,2}){auto prefix=L"controlStyles["+std::to_wstring(slot)+L"]";nativeOriginals.push_back(read(settings.h,prefix+L".target"));nativeOriginals.push_back(read(settings.h,prefix+L".styles[0]"));write(settings.h,string(prefix+L".target",L"Grid#VolumeConfirmator"));write(settings.h,string(prefix+L".styles[0]",L"Background=Transparent"));}
+        passed=(apply(root.h,settings.h,0,true,dir)==0)&&passed;
+        bool deferred=false;auto restored=style_slots::restoration(settings.h,nativeOriginals,deferred);for(auto&v:restored)write(settings.h,v);
+        passed=deferred&&style_slots::inactive(read(settings.h,L"controlStyles[1].target"))&&equal(read(settings.h,L"controlStyles[3].target"),fields(0,3)[0])&&passed;
+        passed=(apply(root.h,settings.h,0,false,dir)==0)&&passed;
+        restored=style_slots::restoration(settings.h,nativeOriginals,deferred);for(auto&v:restored)write(settings.h,v);
+        passed=!deferred&&sameSnapshot(before)&&passed;
         write(settings.h,string(L"controlStyles[1].styles[3]",L"Height=999"));
         passed=(apply(root.h,settings.h,0,true,dir)==8)&&!exists(0,dir)&&passed;
         RegDeleteValueW(settings.h,L"controlStyles[1].styles[3]");passed=sameSnapshot(before)&&passed;

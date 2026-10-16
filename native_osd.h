@@ -1,4 +1,5 @@
 #pragma once
+#include "style_slots.h"
 
 // Taskbar Styler also hosts HWConfirmatorUI. Only its named native OSD plate
 // is targeted. Theme, taskbar selectors and every layout property are untouched.
@@ -43,11 +44,11 @@ inline int run(bool restore,const std::wstring&dir,bool animate=true){
             if(!MoveFileExW(temporary.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)){DeleteFileW(temporary.c_str());throw std::runtime_error("backup upgrade");}
         }
         BOOL systemAnimations=TRUE;SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION,0,&systemAnimations,0);
-        auto values=restore?originals:desired(index);if(!restore&&(!animate||!systemAnimations))values[3]=originals[3];
+        bool deferred=false;auto values=restore?style_slots::restoration(settings.h,originals,deferred):desired(index);if(!restore&&(!animate||!systemAnimations))values[3]=originals[3];
         for(auto&v:values)write(settings.h,v);
         explorer_background::notify(root.h);
         for(auto&v:values){auto current=read(settings.h,v.name);if(current.type!=v.type||current.data!=v.data)return 5;}
-        if(restore&&!DeleteFileW(file.c_str()))return 4;
+        if(restore&&!deferred&&!DeleteFileW(file.c_str()))return 4;
         return 0;
     }catch(...){return 6;}
 }

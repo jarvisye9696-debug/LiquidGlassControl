@@ -38,7 +38,7 @@ HWND settingsTabs{};int settingsPage=0,buildingSettings=-1;std::vector<HWND> set
 std::wstring iniPath;
 HWND tabs{},compatibility{},nativeInfo{};
 HANDLE nativeJob{};bool nativeRestoring=false;
-HANDLE shellJob{};int shellRequested=-1;bool shellRequestedOn=false;bool shellOn[3]{};
+HANDLE shellJob{};int shellRequested=-1;bool shellRequestedOn=false,restoreSequence=false;bool shellOn[3]{};
 std::vector<HWND> pageControls[3];int buildingPage=-1,currentPage=0;
 HANDLE explorerJob{};bool explorerRestoring=false,resumeRules=false,exitAfterRestore=false;
 void configureExplorer(bool restore);
@@ -182,10 +182,12 @@ void restoreAll(bool exit){
     if(explorerJob||nativeJob||shellJob)return;
     setRulesActive(false);resumeRules=false;restoreWindows();if(!originals.empty())return;
     exitAfterRestore=exit;
+    restoreSequence=true;
     if(explorerBackupExists()){configureExplorer(true);return;}
     if(nativeBackupExists()){configureNative(true);return;}
     if(shellBackupExists()){configureShell(-1,false);return;}
     message(tr(L"已还原，恢复到应用前的状态。",L"Restored to the state before Apply."));
+    restoreSequence=false;
     if(exitAfterRestore)DestroyWindow(mainWindow);
 }
 void combo(HWND h,std::initializer_list<const wchar_t*> labels,int sel){SendMessageW(h,CB_RESETCONTENT,0,0);for(auto s:labels)SendMessageW(h,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(s));SendMessageW(h,CB_SETCURSEL,sel<0?0:sel,0);}
@@ -197,7 +199,7 @@ void configureExplorer(bool restore){
     const wchar_t* commands[]={L"--explorer-acrylic",L"--explorer-mica",L"--explorer-mica-alt",L"--explorer-none"};
     int index=selection(material);if(index<0||index>3)index=0;
     SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=restore?L"--explorer-restore":commands[index];info.nShow=SW_HIDE;
-    if(!ShellExecuteExW(&info)){resumeRules=false;exitAfterRestore=false;message(tr(L"授权已取消，操作未完成，可再次点击重试。",L"Approval canceled. Operation incomplete; click again to retry."));return;}
+    if(!ShellExecuteExW(&info)){resumeRules=false;exitAfterRestore=false;restoreSequence=false;message(tr(L"授权已取消，操作未完成，可再次点击重试。",L"Approval canceled. Operation incomplete; click again to retry."));return;}
     explorerJob=info.hProcess;explorerRestoring=restore;
     updateNativeInfo();
     SetTimer(mainWindow,2,200,nullptr);
@@ -218,7 +220,7 @@ void pollExplorer(){
     }
     else if(code==8)message(tr(L"检测到原有主题或自定义样式，已停止，避免覆盖。",L"Existing theme or custom styles detected; stopped to preserve them."));
     else message(std::wstring(tr(L"背景后端失败，错误码：",L"Background backend failed, code: "))+std::to_wstring(code)+tr(L"（3：模块未安装/无权限；7：模块已禁用；6：备份异常）。",L" (3: missing module/access; 7: disabled module; 6: backup error)."));
-    resumeRules=false;exitAfterRestore=false;
+    resumeRules=false;exitAfterRestore=false;restoreSequence=false;
 }
 void configureNative(bool restore){
     if(nativeJob||explorerJob||shellJob)return;
@@ -227,7 +229,7 @@ void configureNative(bool restore){
     int mask=restore?0:requestedMask>=0?requestedMask:((volumeOn?1:0)|(brightnessOn?2:0));requestedMask=mask;
     std::wstring command=L"--native-switch-"+std::to_wstring(mask)+(motionEnabled?L"":L"-static");
     SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=command.c_str();info.nShow=SW_HIDE;
-    if(!ShellExecuteExW(&info)){requestedMask=-1;exitAfterRestore=false;message(tr(L"授权已取消，原生提示条操作未完成。",L"Approval canceled. Native indicator operation incomplete."));return;}
+    if(!ShellExecuteExW(&info)){requestedMask=-1;exitAfterRestore=false;restoreSequence=false;message(tr(L"授权已取消，原生提示条操作未完成。",L"Approval canceled. Native indicator operation incomplete."));return;}
     nativeJob=info.hProcess;nativeRestoring=restore||mask==0;for(int id:{NativeApply,NativeRestore,Apply,Restore})EnableWindow(GetDlgItem(mainWindow,id),FALSE);updateNativeInfo();
     SetTimer(mainWindow,2,200,nullptr);
 }
@@ -235,16 +237,16 @@ void pollNative(){
     if(!nativeJob||WaitForSingleObject(nativeJob,0)!=WAIT_OBJECT_0)return;
     DWORD code=1;GetExitCodeProcess(nativeJob,&code);CloseHandle(nativeJob);nativeJob=nullptr;for(int id:{NativeApply,NativeRestore,Apply,Restore,VolumeOn,VolumeOff,BrightnessOn,BrightnessOff})EnableWindow(GetDlgItem(mainWindow,id),TRUE);
     if(!code){volumeOn=(requestedMask&1)!=0;brightnessOn=(requestedMask&2)!=0;WritePrivateProfileStringW(L"Native",L"VolumeOn",volumeOn?L"1":L"0",iniPath.c_str());WritePrivateProfileStringW(L"Native",L"BrightnessOn",brightnessOn?L"1":L"0",iniPath.c_str());}requestedMask=-1;updateNativeInfo();
-    if(!code){message(nativeRestoring?tr(L"Windows 原生音量与亮度提示已还原。",L"Native Windows volume and brightness indicators restored."):tr(L"已设置原生提示条背景。按音量键或亮度键查看。",L"Native indicator background configured. Use volume or brightness keys."));if(nativeRestoring&&shellBackupExists()){configureShell(-1,false);return;}if(nativeRestoring&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
+    if(!code){message(nativeRestoring?tr(L"Windows 原生音量与亮度提示已还原。",L"Native Windows volume and brightness indicators restored."):tr(L"已设置原生提示条背景。按音量键或亮度键查看。",L"Native indicator background configured. Use volume or brightness keys."));if(nativeRestoring&&restoreSequence&&shellBackupExists()){configureShell(-1,false);return;}if(nativeRestoring&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
     else message(std::wstring(tr(L"原生提示条后端失败，错误码：",L"Native indicator backend failed, code: "))+std::to_wstring(code)+tr(L"。3：模块未安装/无权限；7：模块禁用；6：备份异常。",L". 3: module/access unavailable; 7: disabled; 6: backup error."));
-    exitAfterRestore=false;
+    exitAfterRestore=false;restoreSequence=false;
 }
 void configureShell(int kind,bool on){
     if(shellJob||nativeJob||explorerJob)return;
     wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
     std::wstring command=kind<0?L"--surface-restore-all":L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");
     SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=command.c_str();info.nShow=SW_HIDE;
-    if(!ShellExecuteExW(&info)){exitAfterRestore=false;updateNativeInfo();message(tr(L"授权已取消，开关保持原状态。",L"Approval canceled; switch state unchanged."));return;}
+    if(!ShellExecuteExW(&info)){exitAfterRestore=false;restoreSequence=false;updateNativeInfo();message(tr(L"授权已取消，开关保持原状态。",L"Approval canceled; switch state unchanged."));return;}
     shellRequested=kind;shellRequestedOn=on;shellJob=info.hProcess;
     for(int id:{Apply,Restore,ExitApp})EnableWindow(GetDlgItem(mainWindow,id),FALSE);
     updateNativeInfo();SetTimer(mainWindow,2,200,nullptr);
@@ -254,11 +256,11 @@ void pollShell(){
     DWORD code=1;GetExitCodeProcess(shellJob,&code);CloseHandle(shellJob);shellJob=nullptr;
     for(int id:{Apply,Restore,ExitApp})EnableWindow(GetDlgItem(mainWindow,id),TRUE);
     // The journal is authoritative across restarts and partial restoration failures.
-    for(int i=0;i<3;++i)shellOn[i]=shell_materials::exists(i,settingsDir());
+    for(int i=0;i<3;++i)shellOn[i]=shell_materials::configured(i,settingsDir());
     updateNativeInfo();
     if(!code){message(shellRequestedOn?tr(L"玻璃背景已设置，请打开对应区域查看。",L"Glass background configured. Open the corresponding surface to view it."):tr(L"已恢复原背景样式。",L"Original background styles restored."));if(shellRequested<0&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
     else message(std::wstring(tr(L"系统玻璃操作未完成，错误码：",L"System glass operation incomplete, code: "))+std::to_wstring(code)+tr(L"。3：模组/权限不可用；7：模组禁用；8：样式冲突；6：备份异常。已保留恢复文件。",L". 3: module/access unavailable; 7: disabled; 8: style conflict; 6: journal error. Recovery files are retained."));
-    exitAfterRestore=false;
+    exitAfterRestore=false;restoreSequence=false;
 }
 int selfTest(){
     bool passed=true;
@@ -350,10 +352,10 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
         case Scope:if(HIWORD(w)==CBN_SELCHANGE)updateCompatibility();break;
         case MotionEnabled:motionEnabled=SendMessageW(GetDlgItem(h,MotionEnabled),BM_GETCHECK,0,0)==BST_CHECKED;WritePrivateProfileStringW(L"Native",L"Motion",motionEnabled?L"1":L"0",iniPath.c_str());break;
         case StartupAnimation:startupAnimation=SendMessageW(GetDlgItem(h,StartupAnimation),BM_GETCHECK,0,0)==BST_CHECKED;WritePrivateProfileStringW(L"UI",L"StartupAnimation",startupAnimation?L"1":L"0",iniPath.c_str());break;
-        case VolumeOn:case BrightnessOn:{int mask=(volumeOn?1:0)|(brightnessOn?2:0);mask^=LOWORD(w)==VolumeOn?1:2;updateNativeInfo();requestedMask=mask;exitAfterRestore=false;configureNative(false);break;}
-        case TaskbarToggle:case StartToggle:case NotificationToggle:{int kind=LOWORD(w)-TaskbarToggle;updateNativeInfo();exitAfterRestore=false;configureShell(kind,!shellOn[kind]);break;}
-        case NativeApply:exitAfterRestore=false;configureNative(false);break;
-        case NativeRestore:exitAfterRestore=false;configureNative(true);break;
+        case VolumeOn:case BrightnessOn:{int mask=(volumeOn?1:0)|(brightnessOn?2:0);mask^=LOWORD(w)==VolumeOn?1:2;updateNativeInfo();requestedMask=mask;exitAfterRestore=false;restoreSequence=false;configureNative(false);break;}
+        case TaskbarToggle:case StartToggle:case NotificationToggle:{int kind=LOWORD(w)-TaskbarToggle;updateNativeInfo();exitAfterRestore=false;restoreSequence=false;configureShell(kind,!shellOn[kind]);break;}
+        case NativeApply:exitAfterRestore=false;restoreSequence=false;configureNative(false);break;
+        case NativeRestore:exitAfterRestore=false;restoreSequence=false;configureNative(true);break;
         case ExitApp:restoreAll(true);break;
         case Refresh:refresh();break;case Apply:apply();break;
         case Restore:restoreAll();break;
@@ -372,10 +374,10 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
 }
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
-    for(int kind=0;kind<3;++kind)for(int on=0;on<2;++on){std::wstring expected=L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");if(expected==commandLine){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return shell_materials::run(kind,on!=0,dir);}}
-    if(wcscmp(commandLine,L"--surface-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);for(int kind=0;kind<3;++kind){int code=shell_materials::run(kind,false,dir);if(code)return code;}return 0;}
-    for(int mask=0;mask<4;++mask)for(int still=0;still<2;++still){std::wstring expected=L"--native-switch-"+std::to_wstring(mask)+(still?L"-static":L"");if(expected==commandLine){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return native_switches::run(mask,!still,dir);}}
-    if(wcscmp(commandLine,L"--native-apply")==0||wcscmp(commandLine,L"--native-static")==0||wcscmp(commandLine,L"--native-restore")==0){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return native_switches::run(wcscmp(commandLine,L"--native-restore")==0?0:3,wcscmp(commandLine,L"--native-static")!=0,dir);}
+    for(int kind=0;kind<3;++kind)for(int on=0;on<2;++on){std::wstring expected=L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");if(expected==commandLine){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return shell_materials::operation(kind,on!=0,dir);}}
+    if(wcscmp(commandLine,L"--surface-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);for(int kind=0;kind<3;++kind){int code=shell_materials::run(kind,false,dir);if(code)return code;}return shell_materials::cleanupTaskbar(dir);}
+    for(int mask=0;mask<4;++mask)for(int still=0;still<2;++still){std::wstring expected=L"--native-switch-"+std::to_wstring(mask)+(still?L"-static":L"");if(expected==commandLine){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return shell_materials::nativeOperation(mask,!still,dir);}}
+    if(wcscmp(commandLine,L"--native-apply")==0||wcscmp(commandLine,L"--native-static")==0||wcscmp(commandLine,L"--native-restore")==0){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return shell_materials::nativeOperation(wcscmp(commandLine,L"--native-restore")==0?0:3,wcscmp(commandLine,L"--native-static")!=0,dir);}
     if(wcsncmp(commandLine,L"--explorer-",11)==0){const wchar_t*effect=nullptr;bool restore=false;
         if(wcscmp(commandLine,L"--explorer-acrylic")==0)effect=L"acrylic";else if(wcscmp(commandLine,L"--explorer-mica")==0)effect=L"mica";else if(wcscmp(commandLine,L"--explorer-mica-alt")==0)effect=L"micaAlt";else if(wcscmp(commandLine,L"--explorer-none")==0)effect=L"none";else if(wcscmp(commandLine,L"--explorer-restore")==0){restore=true;effect=L"";}else return 10;
         wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);std::wstring dir=exe;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return explorer_background::run(effect,restore,dir);}
@@ -389,7 +391,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
     INITCOMMONCONTROLSEX common{};common.dwSize=sizeof(common);common.dwICC=ICC_TAB_CLASSES;InitCommonControlsEx(&common);
     wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);iniPath=path;iniPath=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"settings.ini";
     english=readEnglish(iniPath);
-    for(int i=0;i<3;++i)shellOn[i]=shell_materials::exists(i,settingsDir());
+    for(int i=0;i<3;++i)shellOn[i]=shell_materials::configured(i,settingsDir());
     motionEnabled=GetPrivateProfileIntW(L"Native",L"Motion",1,iniPath.c_str())!=0;
     volumeOn=GetPrivateProfileIntW(L"Native",L"VolumeOn",nativeBackupExists()?1:0,iniPath.c_str())!=0;brightnessOn=GetPrivateProfileIntW(L"Native",L"BrightnessOn",nativeBackupExists()?1:0,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
     applyColorTheme(GetPrivateProfileIntW(L"UI",L"ColorTheme",0,iniPath.c_str()),false);WNDCLASSEXW c{};c.cbSize=sizeof(c);c.lpfnWndProc=proc;c.hInstance=instance;c.lpszClassName=ClassName;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.hIcon=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);c.hIconSm=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);c.hbrBackground=background;
