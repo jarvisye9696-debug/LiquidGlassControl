@@ -24,6 +24,10 @@ Glass-style controls for **Windows 11 x64** · **Windows 11 x64** 玻璃效果�
 - 部分应用内容区无法透明，进度条液态动画尚未实现。不改变任务栏位置和大小。
 - 删除程序前使用 **设置 → 关于 → 还原并退出**，恢复成功前保留备份文件。
 
+## Contributors / 贡献者
+
+- [DK (@domk6966)](https://github.com/domk6966)
+
 [Contributing / 参与开发](CONTRIBUTING.md) · [Build & release / 构建与发布](RELEASING.md)
 
 Preview version; no open-source license selected yet. / 当前为预览版，暂未选择开源许可证。
