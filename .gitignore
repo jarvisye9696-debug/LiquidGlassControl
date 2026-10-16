@@ -1,0 +1,14 @@
+build/
+dist/
+.vs/
+.vscode/
+out/
+CMakeUserPresets.json
+settings.ini
+*.recovery.bin
+*-originals.bin
+native-osd-switches.bin
+self-test.txt
+*.log
+*.user
+*.suo

@@ -1,0 +1,10 @@
+name: Feature request / 功能建议
+description: Propose a focused improvement / 提出功能改进
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: Desired behavior / 希望实现的效果
+      description: Describe the use case and how the feature should behave.
+    validations:
+      required: true

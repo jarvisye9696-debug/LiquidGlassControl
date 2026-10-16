@@ -1,0 +1,22 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem / 报告可复现的问题
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened? / 出现了什么问题？
+      description: Include expected behavior and steps to reproduce. 请描述预期效果和复现步骤。
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: App version, Windows build, display scaling and UI language.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Windhawk and screenshots / 依赖与截图
+      description: Relevant mod versions, apply/restore results and screenshots. Remove personal information before posting.

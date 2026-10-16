@@ -1,0 +1,28 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build/cmake -A x64
+      - name: Build
+        run: cmake --build build/cmake --config Release
+      - name: Self-test and package
+        shell: pwsh
+        run: ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiquidGlassControl-win11-x64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
