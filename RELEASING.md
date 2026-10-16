@@ -4,7 +4,7 @@ The repository and v0.9 preview downloads are public. No open-source license has
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
 2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.
-3. Build and verify on Windows 11. Test both UI languages and live effect restoration. CI self-tests do not verify Windhawk integration or every app's compatibility.
+3. Build and verify on Windows 11. Test both UI languages and live effect restoration. CI factory/unit tests do not verify live XAML styling. Complete the validation in ARCHITECTURE.md before release.
 4. Commit version changes, then push a tag matching the package version, for example `v0.9`:
 
    ```powershell
@@ -25,4 +25,4 @@ For a manual package:
 ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
 ```
 
-Never upload your personal `settings.ini`, original-style backups or test logs as release assets. Windhawk is not bundled. Preserve the guide's dependency and compatibility notes. Packages are currently unsigned.
+Never upload your personal `settings.ini`, original-style backups or test logs as release assets. The standalone engine is embedded; Windhawk is not required. Preserve the guide's dependency and compatibility notes. Packages are currently unsigned.

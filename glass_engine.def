@@ -1,0 +1,4 @@
+EXPORTS
+    DllGetClassObject
+    DllCanUnloadNow
+    GlassHook

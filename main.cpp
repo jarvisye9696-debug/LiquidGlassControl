@@ -16,6 +16,8 @@
 #include <commctrl.h>
 #include <uxtheme.h>
 #include <cmath>
+#include <powrprof.h>
+#include "glass_controller.h"
 #include "explorer_background.h"
 #include "native_osd.h"
 #include "native_switches.h"
@@ -27,30 +29,33 @@
 namespace {
 constexpr wchar_t ClassName[]=L"LiquidGlass.Control";
 enum {Language=101,Refresh,Apply,Restore,Pause,Scope,Material,Corners,List=113,Status,Note,
-    Header=130,Pages,Compatibility,OverlayNote=145,SettingsNote=152,ExitApp,
-    NativeApply=160,NativeRestore,NativeInfo,MotionEnabled,VolumeHeading=166,BrightnessHeading,
+    Header=130,Pages,Compatibility,SettingsNote=152,ExitApp,
+    NativeInfo=162,VolumeHeading=166,BrightnessHeading,
     VolumeOn=180,VolumeOff,BrightnessOn,BrightnessOff,SettingsPages=190,LanguageLabel,StartupAnimation,MotionText,CompatText,AboutText,ColorThemeLabel,ColorTheme,
-    TaskbarToggle=210,StartToggle,NotificationToggle,TaskbarHeading,StartHeading,NotificationHeading,TaskbarHint,StartHint,NotificationHint};
+    TaskbarToggle=210,StartToggle,NotificationToggle,TaskbarHeading,StartHeading,NotificationHeading,TaskbarHint,StartHint,NotificationHint,
+    ExplorerToggle=230,ExplorerHeading,OpacityLabel,OpacitySlider,RadiusLabel,RadiusSlider,TintLabel,TintCombo,BatteryFriendly,EffectNote,EffectValue};
 HWND mainWindow{}, language{}, scope{}, material{}, corners{}, list{}, status{}, note{};
 HFONT font{}; HBRUSH background{}; NOTIFYICONDATAW tray{};
 bool english=true,enabled=false,busy=false; UINT dpi=96;
-bool motionEnabled=true;HWINEVENTHOOK windowEvents{};unsigned attributeWrites=0;
-bool volumeOn=false,brightnessOn=false,startupAnimation=true,startupPlayed=false;int requestedMask=-1;ULONGLONG startupTime=0;RECT startupRect{};
-HWND settingsTabs{};int settingsPage=0,buildingSettings=-1;std::vector<HWND> settingsControls[4];std::map<std::wstring,HICON> appIcons;
+HWINEVENTHOOK windowEvents{};unsigned attributeWrites=0;
+bool volumeOn=false,brightnessOn=false,startupAnimation=true,startupPlayed=false;ULONGLONG startupTime=0;RECT startupRect{};
+HWND settingsTabs{};int settingsPage=0,buildingSettings=-1;std::vector<HWND> settingsControls[5];std::map<std::wstring,HICON> appIcons;
+glass::Controller engine;glass::Config glassConfig;bool explorerOn=false,batteryFriendly=true;HANDLE migrationJob{};HPOWERNOTIFY powerNotification{},acNotification{};bool engineReady=false;
+constexpr GUID PowerSavingStatus={0xe00958c0,0xc213,0x4ace,{0xac,0x77,0xfe,0xcc,0xed,0x2e,0xee,0xa5}};
+void applyGlass(bool discover=true);
+void updateEffectLabels();
+void observeWindows();
+bool migrationNeeded();
+void migrateLegacy();
 std::wstring iniPath;
 HWND tabs{},compatibility{},nativeInfo{};
-HANDLE nativeJob{};bool nativeRestoring=false;
-HANDLE shellJob{};int shellRequested=-1;bool shellRequestedOn=false,restoreSequence=false;bool shellOn[3]{};
+bool shellOn[3]{};
 std::vector<HWND> pageControls[3];int buildingPage=-1,currentPage=0;
-HANDLE explorerJob{};bool explorerRestoring=false,resumeRules=false,exitAfterRestore=false;
-void configureExplorer(bool restore);
+bool exitAfterRestore=false;
 void restoreAll(bool exit=false);
 void updateCompatibility();
-void configureNative(bool restore);
 void updateNativeInfo();
 void selectSettingsPage(int page);
-void configureShell(int kind,bool on);
-void pollShell();
 bool shellBackupExists();
 struct Entry {HWND hwnd; DWORD pid; std::wstring title,exe,cls;HICON icon{};};
 struct Snapshot {DWORD pid;std::wstring cls;int backdrop{},corner{};bool hasBackdrop=false,hasCorner=false;int appliedBackdrop=-1,appliedCorner=-1;};
@@ -68,21 +73,22 @@ bool nativeBackupExists(){auto dir=iniPath.substr(0,iniPath.find_last_of(L"\\")+
 std::wstring settingsDir(){return iniPath.substr(0,iniPath.find_last_of(L"\\")+1);}
 bool shellBackupExists(){for(int i=0;i<3;++i)if(full_themes::pending(i,settingsDir())||shell_materials::exists(i,settingsDir()))return true;return false;}
 void updateNativeInfo(){
-    bool pending=nativeJob||explorerJob||shellJob;
-    if(nativeInfo)SetWindowTextW(nativeInfo,pending?tr(L"正在更新，请稍候……",L"Updating, please wait..."):tr(L"完整主题包含布局与尺寸；关闭后恢复原主题及模组状态。",L"Full themes include layout and sizing. Off restores the prior theme/module state."));
-    int ids[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle};bool states[]={volumeOn,brightnessOn,shellOn[0],shellOn[1],shellOn[2]};
-    for(int i=0;i<5;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&(full_themes::installed(i<2?0:i-2)||(i<2?nativeBackupExists():full_themes::pending(i-2,settingsDir())||shell_materials::exists(i-2,settingsDir()))));InvalidateRect(h,nullptr,FALSE);}
-    const wchar_t* modules[]={L"Taskbar Styler",L"Start Menu Styler",L"Notification Center Styler"};int hints[]={TaskbarHint,StartHint,NotificationHint};for(int i=0;i<3;++i){bool ready=full_themes::installed(i);std::wstring hint=ready?tr(L"LiquidGlass 完整主题 · 开启时启用对应模组",L"LiquidGlass full theme · Enables the installed mod"):std::wstring(tr(L"请安装：",L"Install: "))+modules[i];SetWindowTextW(GetDlgItem(mainWindow,hints[i]),hint.c_str());}
+    bool pending=migrationJob!=nullptr;
+    if(nativeInfo)SetWindowTextW(nativeInfo,pending?tr(L"正在恢复旧版主题，请稍候……",L"Restoring the previous version's theme..."):tr(L"独立材质引擎 · 不需要 Windhawk · 保留系统布局\r\n设置 → 玻璃效果：调整着色、透明感、圆角与省电。",L"Standalone materials · No Windhawk required · System layout preserved\r\nSettings > Glass: tint, opacity, corners and power saving."));
+    int ids[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle};bool states[]={volumeOn,brightnessOn,shellOn[0],shellOn[1],shellOn[2],explorerOn};
+    for(int i=0;i<6;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&engineReady&&!migrationNeeded());InvalidateRect(h,nullptr,FALSE);}
+    for(int id:{TaskbarHint,StartHint,NotificationHint})SetWindowTextW(GetDlgItem(mainWindow,id),L"");
 }
 bool shellClass(const std::wstring& c){return c==L"Shell_TrayWnd"||c==L"Shell_SecondaryTrayWnd"||c==L"Progman"||c==L"WorkerW"||c==L"XamlExplorerHostIslandWindow";}
 bool valid(HWND h,const Snapshot& s){DWORD pid=0;GetWindowThreadProcessId(h,&pid);return IsWindow(h)&&pid==s.pid&&classOf(h)==s.cls&&GetPropW(h,L"LiquidGlass.Control.Owner")==mainWindow;}
 void saveLanguage(){WritePrivateProfileStringW(L"UI",L"Language",english?L"en":L"zh",iniPath.c_str());}
 bool readEnglish(const std::wstring& path){wchar_t lang[8]{};GetPrivateProfileStringW(L"UI",L"Language",L"en",lang,8,path.c_str());return _wcsicmp(lang,L"zh")!=0;}
-void setRulesActive(bool active){enabled=active;if(active)SetTimer(mainWindow,1,15000,nullptr);else{KillTimer(mainWindow,1);KillTimer(mainWindow,3);}}
+void setRulesActive(bool active){enabled=active;if(!active)KillTimer(mainWindow,3);observeWindows();}
 void CALLBACK windowChanged(HWINEVENTHOOK,DWORD,HWND h,LONG object,LONG child,DWORD,DWORD){
-    if(!enabled||!h||object!=OBJID_WINDOW||child!=CHILDID_SELF||GetAncestor(h,GA_ROOT)!=h)return;
+    if((!enabled&&!glassConfig.features)||!h||object!=OBJID_WINDOW||child!=CHILDID_SELF||!IsWindowVisible(h)||GetAncestor(h,GA_ROOT)!=h)return;
     DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid!=GetCurrentProcessId())SetTimer(mainWindow,3,180,nullptr);
 }
+void observeWindows(){bool need=enabled||glassConfig.features;if(need&&!windowEvents)windowEvents=SetWinEventHook(EVENT_OBJECT_CREATE,EVENT_OBJECT_SHOW,nullptr,windowChanged,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);else if(!need&&windowEvents){UnhookWinEvent(windowEvents);windowEvents=nullptr;KillTimer(mainWindow,3);}}
 void selectPage(int page){
     if(page<0||page>2)return;currentPage=page;
     SendMessageW(mainWindow,WM_SETREDRAW,FALSE,0);
@@ -91,7 +97,7 @@ void selectPage(int page){
     if(page==1)updateNativeInfo();
     TabCtrl_SetCurSel(tabs,page);SendMessageW(mainWindow,WM_SETREDRAW,TRUE,0);RedrawWindow(mainWindow,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
 }
-void selectSettingsPage(int page){if(page<0||page>3)return;settingsPage=page;for(int p=0;p<4;++p)for(HWND h:settingsControls[p])ShowWindow(h,currentPage==2&&p==page?SW_SHOWNA:SW_HIDE);TabCtrl_SetCurSel(settingsTabs,page);RedrawWindow(settingsTabs,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE);InvalidateRect(mainWindow,nullptr,FALSE);}
+void selectSettingsPage(int page){if(page<0||page>4)return;settingsPage=page;for(int p=0;p<5;++p)for(HWND h:settingsControls[p])ShowWindow(h,currentPage==2&&p==page?SW_SHOWNA:SW_HIDE);TabCtrl_SetCurSel(settingsTabs,page);RedrawWindow(settingsTabs,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE);InvalidateRect(mainWindow,nullptr,FALSE);}
 void restoreWindows(){
     int failures=0;
     for(auto i=originals.begin();i!=originals.end();){auto h=i->first;auto&s=i->second;
@@ -150,12 +156,13 @@ void refresh(){
     for(size_t i=0;i<entries.size();++i){entries[i].icon=applicationIcon(entries[i]);bool explorer=entries[i].cls==L"CabinetWClass"||entries[i].cls==L"ExploreWClass";std::wstring text=entries[i].exe+(explorer?tr(L" [整窗后端]  —  ",L" [whole-window backend]  —  "):tr(L" [仅外框/待验证]  —  ",L" [frame only/unverified]  —  "))+entries[i].title;SendMessageW(list,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(text.c_str()));if(entries[i].hwnd==previous)sel=(int)i;}
     if(!entries.empty())SendMessageW(list,LB_SETCURSEL,sel,0);
     SendMessageW(list,WM_SETREDRAW,TRUE,0);InvalidateRect(list,nullptr,FALSE);
+    for(auto i=appIcons.begin();i!=appIcons.end();){bool used=false;for(auto&e:entries)if(e.icon==i->second){used=true;break;}if(!used){DestroyIcon(i->second);i=appIcons.erase(i);}else ++i;}
     updateCompatibility();
 }
 void updateCompatibility(){
     if(!compatibility)return;
     int n=(int)SendMessageW(list,LB_GETCURSEL,0,0);bool explorer=selection(scope)==1||(n>=0&&n<(int)entries.size()&&(entries[n].cls==L"CabinetWClass"||entries[n].cls==L"ExploreWClass"));
-    SetWindowTextW(compatibility,explorer?tr(L"资源管理器：有整窗背景后端，需要已安装 File Explorer Styler。",L"Explorer: whole-window backend available; installed File Explorer Styler required."):tr(L"其他应用：仅尝试外框材质；Chrome / Electron 等内容区通常不受影响。",L"Other apps: frame material only; Chrome / Electron content usually stays opaque."));
+    SetWindowTextW(compatibility,explorer?tr(L"资源管理器：独立 XAML 材质；经典内容区可能仍不透明。",L"Explorer: standalone XAML materials; classic content may remain opaque."):tr(L"其他应用：仅尝试外框材质；Chrome / Electron 等内容区通常不受影响。",L"Other apps: frame material only; Chrome / Electron content usually stays opaque."));
 }
 void sync(bool report){
     if(!enabled||busy)return;busy=true;
@@ -171,101 +178,36 @@ void sync(bool report){
     busy=false;
 }
 void apply(){
-    if(explorerJob||nativeJob||shellJob)return;
+    if(migrationJob)return;
     int nextMode=selection(scope);std::wstring exe;
     if(nextMode==0){int n=(int)SendMessageW(list,LB_GETCURSEL,0,0);if(n<0||n>=(int)entries.size()){message(tr(L"请先选择一个应用窗口。",L"Select an application window first."));return;}exe=entries[n].exe;}
     setRulesActive(false);restoreWindows();if(!originals.empty())return;
     mode=nextMode;selectedExe=exe;int idx=selection(material);backdrop=idx==0?3:idx==1?2:idx==2?4:1;
     corner=selection(corners)==0?2:selection(corners)==1?3:1;
-    if(usesExplorer(mode,selectedExe)){resumeRules=true;configureExplorer(false);return;}
+    if(usesExplorer(mode,selectedExe)){explorerOn=true;applyGlass();}
     setRulesActive(true);sync(true);
 }
 void restoreAll(bool exit){
-    if(explorerJob||nativeJob||shellJob)return;
-    setRulesActive(false);resumeRules=false;restoreWindows();if(!originals.empty())return;
-    exitAfterRestore=exit;
-    restoreSequence=true;
-    if(explorerBackupExists()){configureExplorer(true);return;}
-    if(nativeBackupExists()){configureNative(true);return;}
-    if(shellBackupExists()){configureShell(-1,false);return;}
-    message(tr(L"已还原，恢复到应用前的状态。",L"Restored to the state before Apply."));
-    restoreSequence=false;
-    if(exitAfterRestore)DestroyWindow(mainWindow);
+    if(migrationJob)return;
+    setRulesActive(false);restoreWindows();if(!originals.empty())return;
+    volumeOn=brightnessOn=explorerOn=false;for(bool&on:shellOn)on=false;applyGlass(false);
+    if(migrationNeeded()){exitAfterRestore=exit;migrateLegacy();return;}
+    message(tr(L"已还原所有效果。",L"All effects restored."));if(exit)DestroyWindow(mainWindow);
 }
 void combo(HWND h,std::initializer_list<const wchar_t*> labels,int sel){SendMessageW(h,CB_RESETCONTENT,0,0);for(auto s:labels)SendMessageW(h,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(s));SendMessageW(h,CB_SETCURSEL,sel<0?0:sel,0);}
 #include "ui_style.h"
 #include "control_ui.h"
-void configureExplorer(bool restore){
-    if(explorerJob||nativeJob||shellJob)return;
-    wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
-    const wchar_t* commands[]={L"--explorer-acrylic",L"--explorer-mica",L"--explorer-mica-alt",L"--explorer-none"};
-    int index=selection(material);if(index<0||index>3)index=0;
-    SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=restore?L"--explorer-restore":commands[index];info.nShow=SW_HIDE;
-    if(!ShellExecuteExW(&info)){resumeRules=false;exitAfterRestore=false;restoreSequence=false;message(tr(L"授权已取消，操作未完成，可再次点击重试。",L"Approval canceled. Operation incomplete; click again to retry."));return;}
-    explorerJob=info.hProcess;explorerRestoring=restore;
-    updateNativeInfo();
-    SetTimer(mainWindow,2,200,nullptr);
-    for(int id:{Apply,Restore,Scope,Material,Corners,List})EnableWindow(GetDlgItem(mainWindow,id),FALSE);
-    message(restore?tr(L"正在还原……",L"Restoring..."):tr(L"正在应用……",L"Applying..."));
-}
-void pollExplorer(){
-    if(!explorerJob||WaitForSingleObject(explorerJob,0)!=WAIT_OBJECT_0)return;
-    DWORD code=1;GetExitCodeProcess(explorerJob,&code);CloseHandle(explorerJob);explorerJob=nullptr;
-    for(int id:{Apply,Restore,Scope,Material,Corners,List})EnableWindow(GetDlgItem(mainWindow,id),TRUE);
-    updateNativeInfo();
-    if(!code){
-        if(!explorerRestoring&&resumeRules){setRulesActive(true);sync(false);}
-        message(explorerRestoring?tr(L"已还原，恢复到应用前的状态。",L"Restored to the state before Apply."):tr(L"已应用。点击「还原」即可切换回去。",L"Applied. Click Restore to switch back."));
-        if(explorerRestoring&&nativeBackupExists()){configureNative(true);return;}
-        if(explorerRestoring&&shellBackupExists()){configureShell(-1,false);return;}
-        if(explorerRestoring&&exitAfterRestore){DestroyWindow(mainWindow);return;}
-    }
-    else if(code==8)message(tr(L"检测到原有主题或自定义样式，已停止，避免覆盖。",L"Existing theme or custom styles detected; stopped to preserve them."));
-    else message(std::wstring(tr(L"背景后端失败，错误码：",L"Background backend failed, code: "))+std::to_wstring(code)+tr(L"（3：模块未安装/无权限；7：模块已禁用；6：备份异常）。",L" (3: missing module/access; 7: disabled module; 6: backup error)."));
-    resumeRules=false;exitAfterRestore=false;restoreSequence=false;
-}
-void configureNative(bool restore){
-    if(nativeJob||explorerJob||shellJob)return;
-    wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
-    if(restore&&!nativeBackupExists()){updateNativeInfo();return;}
-    int mask=restore?0:requestedMask>=0?requestedMask:((volumeOn?1:0)|(brightnessOn?2:0));requestedMask=mask;
-    std::wstring command=restore?L"--native-restore":L"--native-switch-"+std::to_wstring(mask)+(motionEnabled?L"":L"-static");
-    SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=command.c_str();info.nShow=SW_HIDE;
-    if(!ShellExecuteExW(&info)){requestedMask=-1;exitAfterRestore=false;restoreSequence=false;message(tr(L"授权已取消，原生提示条操作未完成。",L"Approval canceled. Native indicator operation incomplete."));return;}
-    nativeJob=info.hProcess;nativeRestoring=restore||mask==0;for(int id:{NativeApply,NativeRestore,Apply,Restore})EnableWindow(GetDlgItem(mainWindow,id),FALSE);updateNativeInfo();
-    SetTimer(mainWindow,2,200,nullptr);
-}
-void pollNative(){
-    if(!nativeJob||WaitForSingleObject(nativeJob,0)!=WAIT_OBJECT_0)return;
-    DWORD code=1;GetExitCodeProcess(nativeJob,&code);CloseHandle(nativeJob);nativeJob=nullptr;for(int id:{NativeApply,NativeRestore,Apply,Restore,VolumeOn,VolumeOff,BrightnessOn,BrightnessOff})EnableWindow(GetDlgItem(mainWindow,id),TRUE);
-    if(!code){volumeOn=(requestedMask&1)!=0;brightnessOn=(requestedMask&2)!=0;WritePrivateProfileStringW(L"Native",L"VolumeOn",volumeOn?L"1":L"0",iniPath.c_str());WritePrivateProfileStringW(L"Native",L"BrightnessOn",brightnessOn?L"1":L"0",iniPath.c_str());}requestedMask=-1;updateNativeInfo();
-    if(!code){message(nativeRestoring?tr(L"Windows 原生音量与亮度提示已还原。",L"Native Windows volume and brightness indicators restored."):tr(L"已设置原生提示条背景。按音量键或亮度键查看。",L"Native indicator background configured. Use volume or brightness keys."));if(nativeRestoring&&restoreSequence&&shellBackupExists()){configureShell(-1,false);return;}if(nativeRestoring&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
-    else message(std::wstring(tr(L"原生提示条后端失败，错误码：",L"Native indicator backend failed, code: "))+std::to_wstring(code)+tr(L"。3：模块未安装/无权限；7：模块禁用；6：备份异常。",L". 3: module/access unavailable; 7: disabled; 6: backup error."));
-    exitAfterRestore=false;restoreSequence=false;
-}
-void configureShell(int kind,bool on){
-    if(shellJob||nativeJob||explorerJob)return;
-    wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
-    std::wstring command=kind<0?L"--surface-restore-all":L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");
-    SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=command.c_str();info.nShow=SW_HIDE;
-    if(!ShellExecuteExW(&info)){exitAfterRestore=false;restoreSequence=false;updateNativeInfo();message(tr(L"授权已取消，开关保持原状态。",L"Approval canceled; switch state unchanged."));return;}
-    shellRequested=kind;shellRequestedOn=on;shellJob=info.hProcess;
-    for(int id:{Apply,Restore,ExitApp})EnableWindow(GetDlgItem(mainWindow,id),FALSE);
-    updateNativeInfo();SetTimer(mainWindow,2,200,nullptr);
-}
-void pollShell(){
-    if(!shellJob||WaitForSingleObject(shellJob,0)!=WAIT_OBJECT_0)return;
-    DWORD code=1;GetExitCodeProcess(shellJob,&code);CloseHandle(shellJob);shellJob=nullptr;
-    for(int id:{Apply,Restore,ExitApp})EnableWindow(GetDlgItem(mainWindow,id),TRUE);
-    // The journal is authoritative across restarts and partial restoration failures.
-    for(int i=0;i<3;++i)shellOn[i]=full_themes::configured(i,settingsDir())||shell_materials::configured(i,settingsDir());
-    updateNativeInfo();
-    if(!code){message(shellRequestedOn?tr(L"LiquidGlass 完整主题已应用，请打开对应区域查看。",L"LiquidGlass full theme applied. Open the surface to view it."):tr(L"已恢复原主题及模组状态。",L"Original theme and module state restored."));if(shellRequested<0&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
-    else message(std::wstring(tr(L"系统玻璃操作未完成，错误码：",L"System glass operation incomplete, code: "))+std::to_wstring(code)+tr(L"。3：模组/权限不可用；7：模组禁用；8：样式冲突；6：备份异常。已保留恢复文件。",L". 3: module/access unavailable; 7: disabled; 8: style conflict; 6: journal error. Recovery files are retained."));
-    exitAfterRestore=false;restoreSequence=false;
-}
+#include "glass_features.h"
 int selfTest(){
     bool passed=true;
+    // Exercise the embedded engine and its COM factory without attaching to
+    // Explorer or changing any live shell material. CI needs no Windhawk.
+    auto testDir=settingsDir()+L"engine-test-"+std::to_wstring(GetCurrentProcessId())+L"\\";
+    bool made=CreateDirectoryW(testDir.c_str(),nullptr)!=FALSE;
+    if(made){glass::Controller probe;passed=probe.initialize(testDir)&&probe.available()&&probe.factoryTest()&&passed;probe.shutdown();DeleteFileW((testDir+L"LiquidGlass.Engine-0.10.0.dll").c_str());RemoveDirectoryW(testDir.c_str());}else passed=false;
+    glass::Config invalid;invalid.features=0xffffffff;invalid.opacity=500;invalid.radius=999;invalid.tint=999;auto safe=glass::normalize(invalid);passed=passed&&safe.features==63&&safe.opacity==90&&safe.radius==28&&safe.tint==2;
+    passed=passed&&glass::identify(L"BackgroundFill",L"Windows.UI.Xaml.Shapes.Rectangle",0)==glass::TaskbarFill&&glass::identify(L"BackgroundFill",L"Windows.UI.Xaml.Shapes.Rectangle",3)==glass::NoSurface&&glass::identify(L"MyDocument",L"Grid",3)==glass::NoSurface;
+    passed=passed&&!glass::active(glass::VolumePlate,glass::Brightness)&&glass::active(glass::BrightnessPlate,glass::Brightness)&&!glass::active(glass::TaskbarFill,glass::Start);
     // Exercise first launch and saved preferences without touching the user's INI.
     auto userIni=iniPath;bool userEnglish=english;
     iniPath=userIni+L".language-test-"+std::to_wstring(GetCurrentProcessId());
@@ -279,11 +221,11 @@ int selfTest(){
     passed=passed&&TabCtrl_GetItemCount(tabs)==3;
     selectPage(1);passed=passed&&((GetWindowLongPtrW(GetDlgItem(mainWindow,VolumeOn),GWL_STYLE)&WS_VISIBLE)!=0)&&((GetWindowLongPtrW(list,GWL_STYLE)&WS_VISIBLE)==0);
     passed=passed&&!GetDlgItem(mainWindow,VolumeOff)&&!GetDlgItem(mainWindow,BrightnessOff);
-    for(int id:{VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle}){HWND h=GetDlgItem(mainWindow,id);RECT r{};GetWindowRect(h,&r);passed=passed&&h&&((GetWindowLongPtrW(h,GWL_STYLE)&BS_TYPEMASK)==BS_AUTOCHECKBOX)&&r.right-r.left<=MulDiv(110,dpi,96)&&r.bottom-r.top<=MulDiv(40,dpi,96);}
+    for(int id:{VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle}){HWND h=GetDlgItem(mainWindow,id);RECT r{};GetWindowRect(h,&r);passed=passed&&h&&((GetWindowLongPtrW(h,GWL_STYLE)&BS_TYPEMASK)==BS_AUTOCHECKBOX)&&r.right-r.left<=MulDiv(110,dpi,96)&&r.bottom-r.top<=MulDiv(40,dpi,96);}
     passed=shell_materials::regressionTest(settingsDir())&&passed;
     passed=full_themes::regressionTest(settingsDir())&&passed;
     selectPage(2);passed=passed&&((GetWindowLongPtrW(GetDlgItem(mainWindow,SettingsNote),GWL_STYLE)&WS_VISIBLE)!=0);
-    passed=passed&&TabCtrl_GetItemCount(settingsTabs)==4;selectSettingsPage(1);passed=passed&&((GetWindowLongPtrW(language,GWL_STYLE)&WS_VISIBLE)==0);
+    passed=passed&&TabCtrl_GetItemCount(settingsTabs)==5;selectSettingsPage(1);passed=passed&&((GetWindowLongPtrW(language,GWL_STYLE)&WS_VISIBLE)==0);
     selectSettingsPage(2);RECT pending{};passed=passed&&settingsPage==2&&TabCtrl_GetCurSel(settingsTabs)==2&&GetUpdateRect(settingsTabs,&pending,FALSE);
     for(HWND tab:{tabs,settingsTabs}){RECT client{},last{};GetClientRect(tab,&client);TabCtrl_GetItemRect(tab,TabCtrl_GetItemCount(tab)-1,&last);passed=passed&&last.right<=client.right;}
     selectSettingsPage(0);passed=passed&&((GetWindowLongPtrW(language,GWL_STYLE)&WS_VISIBLE)!=0);
@@ -330,7 +272,7 @@ int selfTest(){
     }
     if(fixture)DestroyWindow(fixture);
     std::wstring report=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"self-test.txt";
-    const char* result=passed?(supported?"PASS: compact bilingual switches; full-theme activation/restore/conflicts; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility; zero duplicate DWM writes; restore.\r\n":"PASS: compact bilingual switches; full-theme activation/restore/conflicts; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility. SKIP: DWM backdrop unavailable.\r\n"):"FAIL: UI, caching, backup compatibility, or restoration check.\r\n";
+    const char* result=passed?(supported?"PASS: embedded standalone engine and COM factory; isolated feature masks; bounded material controls; compact bilingual switches; legacy-theme restore/conflicts; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility; zero duplicate DWM writes; restore.\r\n":"PASS: embedded standalone engine and COM factory; isolated feature masks; bounded material controls; compact bilingual switches; legacy-theme restore/conflicts; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility. SKIP: DWM backdrop unavailable.\r\n"):"FAIL: UI, caching, backup compatibility, or restoration check.\r\n";
     HANDLE file=CreateFileW(report.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);DWORD written=0;
     if(file!=INVALID_HANDLE_VALUE){WriteFile(file,result,(DWORD)lstrlenA(result),&written,nullptr);CloseHandle(file);}else passed=false;
     return passed?0:2;
@@ -341,7 +283,7 @@ void show(){
 }
 void menu(){HMENU m=CreatePopupMenu();AppendMenuW(m,MF_STRING,1,tr(L"打开设置",L"Open settings"));AppendMenuW(m,MF_STRING,2,tr(L"还原",L"Restore"));AppendMenuW(m,MF_STRING,3,tr(L"还原并退出",L"Restore and exit"));POINT p;GetCursorPos(&p);SetForegroundWindow(mainWindow);int n=TrackPopupMenu(m,TPM_RETURNCMD|TPM_RIGHTBUTTON,p.x,p.y,0,mainWindow,nullptr);DestroyMenu(m);if(n==1)show();if(n==2)restoreAll();if(n==3)restoreAll(true);PostMessageW(mainWindow,WM_NULL,0,0);}
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
-    static UINT restart=RegisterWindowMessageW(L"TaskbarCreated");if(msg==restart){Shell_NotifyIconW(NIM_ADD,&tray);Shell_NotifyIconW(NIM_SETVERSION,&tray);return 0;}
+    static UINT restart=RegisterWindowMessageW(L"TaskbarCreated");if(msg==restart){Shell_NotifyIconW(NIM_ADD,&tray);Shell_NotifyIconW(NIM_SETVERSION,&tray);if(glassConfig.features)engine.discover();return 0;}
     switch(msg){
     case WM_PAINT:paintChrome(h);return 0;
     case WM_ERASEBKGND:return 1;
@@ -353,23 +295,27 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
         case ColorTheme:if(HIWORD(w)==CBN_SELCHANGE)applyColorTheme(selection(GetDlgItem(h,ColorTheme)),true);break;
         case List:if(HIWORD(w)==LBN_SELCHANGE)updateCompatibility();break;
         case Scope:if(HIWORD(w)==CBN_SELCHANGE)updateCompatibility();break;
-        case MotionEnabled:motionEnabled=SendMessageW(GetDlgItem(h,MotionEnabled),BM_GETCHECK,0,0)==BST_CHECKED;WritePrivateProfileStringW(L"Native",L"Motion",motionEnabled?L"1":L"0",iniPath.c_str());break;
+        case TintCombo:if(HIWORD(w)==CBN_SELCHANGE){glassConfig.tint=selection(GetDlgItem(h,TintCombo));applyGlass(false);}break;
+        case BatteryFriendly:batteryFriendly=SendMessageW(GetDlgItem(h,BatteryFriendly),BM_GETCHECK,0,0)==BST_CHECKED;applyGlass(false);break;
         case StartupAnimation:startupAnimation=SendMessageW(GetDlgItem(h,StartupAnimation),BM_GETCHECK,0,0)==BST_CHECKED;WritePrivateProfileStringW(L"UI",L"StartupAnimation",startupAnimation?L"1":L"0",iniPath.c_str());break;
-        case VolumeOn:case BrightnessOn:{int mask=(volumeOn?1:0)|(brightnessOn?2:0);mask^=LOWORD(w)==VolumeOn?1:2;updateNativeInfo();requestedMask=mask;exitAfterRestore=false;restoreSequence=false;configureNative(false);break;}
-        case TaskbarToggle:case StartToggle:case NotificationToggle:{int kind=LOWORD(w)-TaskbarToggle;updateNativeInfo();exitAfterRestore=false;restoreSequence=false;configureShell(kind,!shellOn[kind]);break;}
-        case NativeApply:exitAfterRestore=false;restoreSequence=false;configureNative(false);break;
-        case NativeRestore:exitAfterRestore=false;restoreSequence=false;configureNative(true);break;
+        case VolumeOn:volumeOn=!volumeOn;applyGlass();break;
+        case BrightnessOn:brightnessOn=!brightnessOn;applyGlass();break;
+        case ExplorerToggle:explorerOn=!explorerOn;applyGlass();break;
+        case TaskbarToggle:case StartToggle:case NotificationToggle:{int kind=LOWORD(w)-TaskbarToggle;shellOn[kind]=!shellOn[kind];applyGlass();break;}
         case ExitApp:restoreAll(true);break;
         case Refresh:refresh();break;case Apply:apply();break;
         case Restore:restoreAll();break;
         case Pause:ShowWindow(h,SW_HIDE);break;
         }return 0;
-    case WM_TIMER:if(w==4){float t=std::min(1.f,(GetTickCount64()-startupTime)/180.f),ease=1-powf(1-t,3);SetLayeredWindowAttributes(h,0,(BYTE)(255*ease),LWA_ALPHA);SetWindowPos(h,nullptr,startupRect.left,startupRect.top+(int)((1-ease)*MulDiv(12,dpi,96)),0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);if(t>=1){KillTimer(h,4);SetWindowLongPtrW(h,GWL_EXSTYLE,GetWindowLongPtrW(h,GWL_EXSTYLE)&~WS_EX_LAYERED);RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);}}else if(w==1)sync(false);else if(w==3){KillTimer(h,3);sync(false);}else if(w==2){pollExplorer();pollNative();pollShell();if(!explorerJob&&!nativeJob&&!shellJob)KillTimer(h,2);}return 0;
+    case WM_HSCROLL:if((HWND)l==GetDlgItem(h,OpacitySlider)||(HWND)l==GetDlgItem(h,RadiusSlider)){glassConfig.opacity=(DWORD)SendMessageW(GetDlgItem(h,OpacitySlider),TBM_GETPOS,0,0);glassConfig.radius=(DWORD)SendMessageW(GetDlgItem(h,RadiusSlider),TBM_GETPOS,0,0);updateEffectLabels();if(LOWORD(w)==TB_ENDTRACK||LOWORD(w)==TB_THUMBPOSITION||LOWORD(w)==TB_LINEUP||LOWORD(w)==TB_LINEDOWN||LOWORD(w)==TB_PAGEUP||LOWORD(w)==TB_PAGEDOWN)applyGlass(false);}return 0;
+    case WM_POWERBROADCAST:if(w==PBT_POWERSETTINGCHANGE||w==PBT_APMPOWERSTATUSCHANGE)applyGlass(false);return TRUE;
+    case WM_TIMER:if(w==4){float t=std::min(1.f,(GetTickCount64()-startupTime)/180.f),ease=1-powf(1-t,3);SetLayeredWindowAttributes(h,0,(BYTE)(255*ease),LWA_ALPHA);SetWindowPos(h,nullptr,startupRect.left,startupRect.top+(int)((1-ease)*MulDiv(12,dpi,96)),0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);if(t>=1){KillTimer(h,4);SetWindowLongPtrW(h,GWL_EXSTYLE,GetWindowLongPtrW(h,GWL_EXSTYLE)&~WS_EX_LAYERED);RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);}}else if(w==3){KillTimer(h,3);sync(false);if(glassConfig.features)engine.discover();}else if(w==2)pollMigration();return 0;
     case WM_APP+1:if(LOWORD(l)==WM_CONTEXTMENU)menu();else if(LOWORD(l)==NIN_SELECT||LOWORD(l)==NIN_KEYSELECT)show();return 0;
     case WM_APP+2:show();return 0;
-    case WM_APP+3:if(explorerJob||nativeJob||shellJob)return 0;setRulesActive(false);restoreWindows();if(!originals.empty()){show();return 0;}DestroyWindow(h);return 0;
+    case WM_APP+3:if(migrationJob)return 0;setRulesActive(false);restoreWindows();if(!originals.empty()){show();return 0;}engine.shutdown();DestroyWindow(h);return 0;
+    case WM_APP+5:migrateLegacy();return 0;
     case WM_CLOSE:ShowWindow(h,SW_HIDE);return 0;
-    case WM_QUERYENDSESSION:setRulesActive(false);restoreWindows();return TRUE;
+    case WM_QUERYENDSESSION:setRulesActive(false);restoreWindows();engine.shutdown();return TRUE;
     case WM_CTLCOLORLISTBOX:{SetBkColor(reinterpret_cast<HDC>(w),cardColor());SetTextColor(reinterpret_cast<HDC>(w),textColor());return reinterpret_cast<LRESULT>(cardBrush);}
     case WM_CTLCOLORSTATIC:case WM_CTLCOLORBTN:{int id=GetDlgCtrlID(reinterpret_cast<HWND>(l));bool common=id==Header||id==Status;SetBkMode(reinterpret_cast<HDC>(w),TRANSPARENT);SetTextColor(reinterpret_cast<HDC>(w),id==Header?textColor():palette().pressed);return reinterpret_cast<LRESULT>(common?background:cardBrush);}
     case WM_DESTROY:KillTimer(h,1);KillTimer(h,2);KillTimer(h,3);KillTimer(h,4);Shell_NotifyIconW(NIM_DELETE,&tray);PostQuitMessage(0);return 0;
@@ -377,34 +323,32 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
 }
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
-    for(int kind=0;kind<3;++kind)for(int on=0;on<2;++on){std::wstring expected=L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");if(expected==commandLine){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return full_themes::operation(kind,on!=0,dir);}}
-    if(wcscmp(commandLine,L"--surface-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);for(int kind=0;kind<3;++kind){int code=full_themes::operation(kind,false,dir);if(code)return code;}return shell_materials::cleanupTaskbar(dir);}
-    for(int mask=0;mask<4;++mask)for(int still=0;still<2;++still){std::wstring expected=L"--native-switch-"+std::to_wstring(mask)+(still?L"-static":L"");if(expected==commandLine){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return full_themes::nativeOperation(mask,!still,dir);}}
-    if(wcscmp(commandLine,L"--native-apply")==0||wcscmp(commandLine,L"--native-static")==0||wcscmp(commandLine,L"--native-restore")==0){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return full_themes::nativeOperation(wcscmp(commandLine,L"--native-restore")==0?0:3,wcscmp(commandLine,L"--native-static")!=0,dir,wcscmp(commandLine,L"--native-restore")==0);}
-    if(wcsncmp(commandLine,L"--explorer-",11)==0){const wchar_t*effect=nullptr;bool restore=false;
-        if(wcscmp(commandLine,L"--explorer-acrylic")==0)effect=L"acrylic";else if(wcscmp(commandLine,L"--explorer-mica")==0)effect=L"mica";else if(wcscmp(commandLine,L"--explorer-mica-alt")==0)effect=L"micaAlt";else if(wcscmp(commandLine,L"--explorer-none")==0)effect=L"none";else if(wcscmp(commandLine,L"--explorer-restore")==0){restore=true;effect=L"";}else return 10;
-        wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);std::wstring dir=exe;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return explorer_background::run(effect,restore,dir);}
-    if(wcscmp(commandLine,L"--shell-apply")==0||wcscmp(commandLine,L"--shell-restore")==0)return 10;
+    if(wcscmp(commandLine,L"--legacy-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return restoreLegacy(dir);}
     if(wcscmp(commandLine,L"--close-running")==0){auto old=FindWindowW(ClassName,nullptr);if(!old)return 0;DWORD_PTR result=0;return SendMessageTimeoutW(old,WM_APP+3,0,0,SMTO_ABORTIFHUNG,5000,&result)?0:1;}
     bool testing=wcscmp(commandLine,L"--self-test")==0;
+    if(*commandLine&&!testing)return 10;
     HANDLE mutex=CreateMutexW(nullptr,FALSE,testing?L"Local\\LiquidGlass.Control.SelfTest":L"Local\\LiquidGlass.Control.SingleInstance");if(!mutex)return 1;
     if(GetLastError()==ERROR_ALREADY_EXISTS){auto old=FindWindowW(ClassName,nullptr);if(old)PostMessageW(old,WM_APP+2,0,0);CloseHandle(mutex);return 0;}
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);dpi=GetDpiForSystem();
     CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
-    INITCOMMONCONTROLSEX common{};common.dwSize=sizeof(common);common.dwICC=ICC_TAB_CLASSES;InitCommonControlsEx(&common);
+    INITCOMMONCONTROLSEX common{};common.dwSize=sizeof(common);common.dwICC=ICC_TAB_CLASSES|ICC_BAR_CLASSES;InitCommonControlsEx(&common);
     wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);iniPath=path;iniPath=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"settings.ini";
     english=readEnglish(iniPath);
-    for(int i=0;i<3;++i)shellOn[i]=full_themes::configured(i,settingsDir())||shell_materials::configured(i,settingsDir());
-    motionEnabled=GetPrivateProfileIntW(L"Native",L"Motion",1,iniPath.c_str())!=0;
-    int priorMask=full_themes::nativeMask(settingsDir());volumeOn=GetPrivateProfileIntW(L"Native",L"VolumeOn",priorMask&1,iniPath.c_str())!=0;brightnessOn=GetPrivateProfileIntW(L"Native",L"BrightnessOn",priorMask&2,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
+    glassConfig.features=GetPrivateProfileIntW(L"Glass",L"Features",0,iniPath.c_str());glassConfig.opacity=GetPrivateProfileIntW(L"Glass",L"Opacity",35,iniPath.c_str());glassConfig.radius=GetPrivateProfileIntW(L"Glass",L"Radius",12,iniPath.c_str());glassConfig.tint=GetPrivateProfileIntW(L"Glass",L"Tint",0,iniPath.c_str());glassConfig=glass::normalize(glassConfig);
+    if(migrationNeeded())glassConfig.features=0;
+    volumeOn=(glassConfig.features&glass::Volume)!=0;brightnessOn=(glassConfig.features&glass::Brightness)!=0;explorerOn=(glassConfig.features&glass::Explorer)!=0;for(int i=0;i<3;++i)shellOn[i]=(glassConfig.features&(glass::Taskbar<<i))!=0;
+    batteryFriendly=GetPrivateProfileIntW(L"Glass",L"BatteryFriendly",1,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
     applyColorTheme(GetPrivateProfileIntW(L"UI",L"ColorTheme",0,iniPath.c_str()),false);WNDCLASSEXW c{};c.cbSize=sizeof(c);c.lpfnWndProc=proc;c.hInstance=instance;c.lpszClassName=ClassName;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.hIcon=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);c.hIconSm=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);c.hbrBackground=background;
     if(!RegisterClassExW(&c)){DeleteObject(background);CloseHandle(mutex);return 1;}
     RECT size={0,0,MulDiv(790,dpi,96),MulDiv(630,dpi,96)};AdjustWindowRectEx(&size,WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,FALSE,0);
     mainWindow=CreateWindowExW(0,ClassName,L"Liquid Glass",WS_CLIPCHILDREN|WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,size.right-size.left,size.bottom-size.top,nullptr,nullptr,instance,nullptr);
     if(!mainWindow){DeleteObject(background);CloseHandle(mutex);return 1;}buildUI();themeWindow(mainWindow);
     if(wcscmp(commandLine,L"--self-test")==0){int result=selfTest();DestroyWindow(mainWindow);for(auto&icon:appIcons)if(icon.second)DestroyIcon(icon.second);destroyFonts();DeleteObject(background);CloseHandle(mutex);CoUninitialize();return result;}
+    engineReady=engine.initialize(settingsDir());updateNativeInfo();
+    if(!engineReady)message(tr(L"独立引擎无法加载，请检查程序所在目录是否可写。",L"Standalone engine could not load. Check that the app folder is writable."));
+    powerNotification=RegisterPowerSettingNotification(mainWindow,&PowerSavingStatus,DEVICE_NOTIFY_WINDOW_HANDLE);acNotification=RegisterPowerSettingNotification(mainWindow,&GUID_ACDC_POWER_SOURCE,DEVICE_NOTIFY_WINDOW_HANDLE);
     tray.cbSize=sizeof(tray);tray.hWnd=mainWindow;tray.uID=1;tray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;tray.uCallbackMessage=WM_APP+1;tray.hIcon=c.hIconSm?c.hIconSm:c.hIcon;tray.uVersion=NOTIFYICON_VERSION_4;
-    if(!Shell_NotifyIconW(NIM_ADD,&tray)){MessageBoxW(mainWindow,tr(L"无法创建托盘图标，程序将退出。",L"Cannot create tray icon; exiting."),L"Liquid Glass",MB_ICONERROR);DestroyWindow(mainWindow);}else{Shell_NotifyIconW(NIM_SETVERSION,&tray);windowEvents=SetWinEventHook(EVENT_OBJECT_CREATE,EVENT_OBJECT_SHOW,nullptr,windowChanged,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);show();}
+    if(!Shell_NotifyIconW(NIM_ADD,&tray)){MessageBoxW(mainWindow,tr(L"无法创建托盘图标，程序将退出。",L"Cannot create tray icon; exiting."),L"Liquid Glass",MB_ICONERROR);DestroyWindow(mainWindow);}else{Shell_NotifyIconW(NIM_SETVERSION,&tray);show();if(migrationNeeded())PostMessageW(mainWindow,WM_APP+5,0,0);else if(glassConfig.features)applyGlass();}
     MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){if(!IsDialogMessageW(mainWindow,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
-    if(windowEvents)UnhookWinEvent(windowEvents);if(shellJob)CloseHandle(shellJob);if(nativeJob)CloseHandle(nativeJob);if(explorerJob)CloseHandle(explorerJob);for(auto&icon:appIcons)if(icon.second)DestroyIcon(icon.second);destroyFonts();DeleteObject(background);CloseHandle(mutex);CoUninitialize();return 0;
+    if(windowEvents)UnhookWinEvent(windowEvents);if(powerNotification)UnregisterPowerSettingNotification(powerNotification);if(acNotification)UnregisterPowerSettingNotification(acNotification);engine.shutdown();if(migrationJob)CloseHandle(migrationJob);for(auto&icon:appIcons)if(icon.second)DestroyIcon(icon.second);destroyFonts();DeleteObject(background);CloseHandle(mutex);CoUninitialize();return 0;
 }

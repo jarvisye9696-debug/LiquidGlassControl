@@ -1,66 +1,33 @@
-Liquid Glass Control 0.9.3 — Windows 11 x64
-免安装版 / Portable edition
+Liquid Glass Control 0.10.0 — Experimental / 实验版
+Windows 11 x64 · Portable / 免安装
 
-【开始使用】
-1. 右键 ZIP → 全部解压。请放在自己的可写文件夹，不要直接在压缩包内运行。
-2. 双击 LiquidGlassControl.exe。无需编译，无需另外安装 C++ 运行库。
-3. 可选：双击 Create Desktop Shortcut.cmd，创建桌面快捷方式。
-   创建后请保留此文件夹的位置；移动文件夹后需要重新创建快捷方式。
-4. 首次启动默认为英文。切换中文：Settings → General → Interface language → 中文。
-   语言选择自动保存，下次启动继续使用所选语言（目前支持中文和英文）。
-5. 关闭窗口后程序留在托盘。彻底退出：设置 → 关于 → 还原并退出。
+中文
+1. 解压到可写目录，双击 LiquidGlassControl.exe。不要在 ZIP 内运行。
+2. 可选：运行 Create Desktop Shortcut.cmd 创建桌面快捷方式。
+3. 首次默认英文，在 Settings → General → Interface language 选择中文。
+4. 系统玻璃页独立开关音量、亮度、任务栏、开始菜单、通知中心和资源管理器。
+5. 设置 → 玻璃效果：调整着色强度、深浅色、圆角和电池省电回退。
+6. 关闭窗口后保留托盘。卸载前使用 设置 → 关于 → 还原并退出。
 
-【效果需要的组件】
-程序可以单独打开。以下功能需要额外安装并启用 Windhawk 模组：
-• 原生音量 / 亮度提示条玻璃：Windows 11 Taskbar Styler。
-• 系统玻璃页：音量、亮度、任务栏、开始菜单、通知中心均使用独立小开关。
-• 任务栏完整主题：Windows 11 Taskbar Styler；包含布局和尺寸。
-• 开始菜单：Windows 11 Start Menu Styler。
-• 通知中心与日历：Windows 11 Notification Center Styler。
-• 开启主题时启用已安装模组，关闭后恢复原主题及启用状态。
-• 资源管理器内容区玻璃：Windows 11 File Explorer Styler。
-Windhawk 官方：https://windhawk.net/
-提示条模组：https://windhawk.net/mods/windows-11-taskbar-styler
-资源管理器模组：https://windhawk.net/mods/windows-11-file-explorer-styler
-在 Windhawk 中安装并启用对应模组即可，无需切换任务栏主题。
-本压缩包不包含 Windhawk，也不会自动安装它。原生样式修改时会请求管理员授权。
-其他应用使用系统窗口材质接口，部分应用自己绘制的不透明内容区无法变玻璃。
-完整主题包含布局和尺寸；截图中的配套模组需单独配置。进度条液态流光 / 数值平滑动画尚未实现。
+独立 XAML 引擎无需 Windhawk，运行时在程序旁释放引擎 DLL，请保留它。
+本版保留任务栏原尺寸和排列，不再套用改变布局的完整主题。
+经典文件列表和部分自绘区域可能仍不透明，尚非完整 File Explorer Styler 效果。
+实验版本仍需实机验证。程序未签名，可能被应用程序控制策略拦截。
+升级先恢复本程序备份的旧 Windhawk 配置；这一步可能请求管理员授权。
+设置和恢复文件保存在程序旁。还原成功前，请勿删除恢复文件。
 
-【还原、更新和卸载】
-语言和偏好保存在程序旁的 settings.ini。
-应用效果后，程序旁可能生成 *-originals.bin / native-osd-switches.bin 恢复文件。
-请保留恢复文件。还原并退出成功之前，不要删除或移动它们。
-更新：先“还原并退出”，再用新版本替换 EXE，保留自己的设置和恢复文件。
-卸载：先“还原并退出”，确认原有效果已恢复，再删除程序文件夹与桌面快捷方式。
-
-【发布范围】
-Windows 11、Intel / AMD 64 位；未打包 ARM64 版本。
-这是当前开发版本。包内包含程序、使用说明与可选快捷方式脚本；不含作者个人配置。
-
-────────────────────────────────────────
 English
+1. Extract the ZIP to a writable folder and open LiquidGlassControl.exe.
+2. Optional: run Create Desktop Shortcut.cmd. Keep the folder in place.
+3. Language: Settings → General → Interface language. Your choice is saved.
+4. System glass: independent volume, brightness, taskbar, Start, notification and Explorer switches.
+5. Settings → Glass: tint strength, light/dark tint, corners and battery-friendly fallback.
+6. Closing keeps the app in the tray. Before removal, use Settings → About → Restore and exit.
 
-System glass has compact independent switches for volume, brightness, taskbar, Start menu and notifications/calendar.
-Taskbar glass uses Windows 11 Taskbar Styler; Start menu and notifications use their respective Styler mods.
-Full-theme switches enable installed mods; Off restores the prior theme/module state.
-
-1. Extract the entire ZIP to a writable folder. Do not run inside the ZIP.
-2. Open LiquidGlassControl.exe. No build tools or extra C++ runtime are needed.
-3. Optional: run Create Desktop Shortcut.cmd. Keep the folder in place afterward.
-4. First launch uses English. Change language under Settings > General > Interface language.
-   Your choice is saved automatically and restored next time. Chinese and English are supported.
-5. Closing the window keeps the app in the tray. To quit: Settings > About > Restore and exit.
-
-Optional dependencies (install and enable the relevant Windhawk mods):
-• Native volume / brightness glass: Windows 11 Taskbar Styler.
-• Explorer content glass: Windows 11 File Explorer Styler.
-Official download and mod pages are listed above. Windhawk is not bundled or installed automatically.
-Native styling requests administrator approval. No taskbar theme switch is required.
-Other applications may keep their own opaque content. Full themes include layout/sizing; companion mods require separate setup.
-Liquid progress highlights and smooth numeric progress animation are not implemented yet.
-
-Settings and restoration backups stay beside the EXE. Keep the backups until Restore and exit succeeds.
-Before updating or deleting the folder, use Restore and exit and confirm effects have been restored.
-For updates, replace the EXE and keep your own settings and backup files.
-This development release targets Windows 11 x64 (Intel / AMD); no ARM64 build is included.
+No Windhawk required. The embedded engine DLL is extracted beside the EXE at runtime.
+Taskbar geometry is preserved. Classic file lists and custom app content may stay opaque.
+This is not the complete File Explorer Styler. Live Windows 11 validation is pending.
+Unsigned builds may be blocked by application-control policy.
+Upgrade restores only the Windhawk settings saved by this app; that migration may request administrator approval.
+Keep settings.ini and recovery files beside the EXE until restoration succeeds.
+No third-party theme tools or mods are installed automatically.

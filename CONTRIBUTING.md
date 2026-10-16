@@ -27,7 +27,7 @@ git push -u origin HEAD
 
 ## Build on Windows
 
-Requirements: Windows 11 x64, CMake 3.20+, Visual Studio 2022 Build Tools with Desktop development with C++ and the Windows SDK. Windhawk is optional for compiling and for the self-test, but is required for specialized live effects.
+Requirements: Windows 11 x64, CMake 3.20+, Visual Studio 2022 Build Tools with Desktop development with C++ and the Windows SDK. Windhawk is not required for compilation, self-tests or the experimental standalone engine.
 
 ```powershell
 cmake -S . -B build/cmake -A x64
@@ -55,10 +55,10 @@ Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk comp
 ## Validation
 
 - Keep every user-facing caption paired in Chinese and English; first launch defaults to English, saved choices persist.
-- Full-theme switches deliberately select Windhawk LiquidGlass themes including layout/sizing. Do not intercept media keys or add duplicate volume/brightness overlays.
+- Keep standalone rules material-only; preserve taskbar geometry and work area. Do not intercept media keys or add duplicate indicators.
 - Preserve custom styles and recovery journals; restore original theme and module activation state when Off.
 - The self-test uses local fixtures and temporary files; it does not apply live system styles. DWM assertions are skipped where unsupported.
-- Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and relevant Windhawk mod versions.
+- Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and whether other styling tools were running. Include memory in injected processes.
 - Do not describe entry transitions as smooth numeric progress animation. The latter is not implemented yet.
 - Do not commit personal INI files, recovery backups, local logs, `build/` or `dist/`.
 
