@@ -4,7 +4,7 @@ The repository and v0.9 preview downloads are public. No open-source license has
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
 2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.
-3. Build and verify on Windows 11. Test both UI languages and live effect restoration. CI factory/unit tests do not verify live XAML styling. Complete the validation in ARCHITECTURE.md before release.
+3. Build and verify on Windows 11. Test all five UI languages and live effect restoration. CI factory/unit tests do not verify live XAML styling. Complete the validation in ARCHITECTURE.md before release.
 4. Commit version changes, then push a tag matching the package version, for example `v0.9`:
 
    ```powershell

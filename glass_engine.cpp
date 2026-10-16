@@ -19,6 +19,9 @@
 #include <algorithm>
 #include <cstdio>
 #include "glass_protocol.h"
+#include "composition_glass.h"
+#include "dock_animation.h"
+#include "xaml_property_watch.h"
 namespace {
 template<class T> struct Ptr {
     T*p=nullptr;Ptr()=default;explicit Ptr(T*v):p(v){};~Ptr(){if(p)p->Release();}
@@ -34,7 +37,7 @@ constexpr GUID ReaderIds[]={{0x9891c6bd,0x534f,0x4955,{0xb8,0x5a,0x8a,0x8d,0xc0,
 constexpr GUID ReleaseId={0x735941a2,0x3ee3,0x495a,{0x8d,0xa9,0x97,0x26,0x27,0x00,0x30,0x75}};
 struct CacheRelease:IUnknown{virtual HRESULT STDMETHODCALLTYPE Unregister(InstanceHandle)=0;};
 HMODULE selfModule{};HANDLE mapping{};glass::Config*shared{};HANDLE ownerHandle{},ownerWait{};DWORD ownerPid{};SRWLOCK configLock=SRWLOCK_INIT;
-void trace(const char*stage,HRESULT hr){wchar_t path[32768]{};GetModuleFileNameW(selfModule,path,32768);std::wstring file=path;file.resize(file.find_last_of(L"\\")+1);file+=L"glass-engine-"+std::to_wstring(GetCurrentProcessId())+L".log";HANDLE h=CreateFileW(file.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(h!=INVALID_HANDLE_VALUE){char text[256]{};int n=snprintf(text,sizeof(text),"%s: 0x%08lx\r\n",stage,(unsigned long)hr);DWORD written=0;WriteFile(h,text,n,&written,nullptr);CloseHandle(h);}}
+void trace(const char*stage,HRESULT hr){static volatile LONG errors=0;if(SUCCEEDED(hr)||InterlockedIncrement(&errors)>32)return;wchar_t path[32768]{};GetModuleFileNameW(selfModule,path,32768);std::wstring file=path;file.resize(file.find_last_of(L"\\")+1);file+=L"glass-engine-"+std::to_wstring(GetCurrentProcessId())+L".log";HANDLE h=CreateFileW(file.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(h!=INVALID_HANDLE_VALUE){char text[256]{};int n=snprintf(text,sizeof(text),"%s: 0x%08lx\r\n",stage,(unsigned long)hr);DWORD written=0;WriteFile(h,text,n,&written,nullptr);CloseHandle(h);}}
 UINT refreshMsg{},attachMsg{};std::atomic<bool> injecting[2]{};
 class Session;SRWLOCK sessionsLock=SRWLOCK_INIT;std::vector<Session*> sessions;
 bool snapshot(glass::Config&c){AcquireSRWLockShared(&configLock);bool valid=false;if(shared)for(int i=0;i<3;++i){LONG s=shared->sequence;if(s&1)continue;MemoryBarrier();c=*shared;MemoryBarrier();if(s==shared->sequence){valid=c.magic==glass::Magic&&c.version==glass::Version;break;}}if(ownerHandle&&WaitForSingleObject(ownerHandle,0)==WAIT_OBJECT_0)c.features=0;ReleaseSRWLockShared(&configLock);return valid;}
@@ -59,21 +62,22 @@ bool connect(DWORD pid){
     ReleaseSRWLockExclusive(&configLock);return true;
 }
 struct Saved {unsigned index{};bool local=false;Ptr<IInspectable> value;};
-struct Node {Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;DWORD appliedSignature=0;};
+struct Node {Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;DWORD appliedSignature=0;bool composition=false;};
 class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     std::atomic<ULONG> refs{1};Ptr<IUnknown> site;Ptr<IXamlDiagnostics> diag;Ptr<IVisualTreeService2> service;Ptr<CacheRelease> cache;
-    struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::vector<InstanceHandle> release;bool updating=false;};
+    struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::vector<InstanceHandle> release;bool updating=false;bool taskbarPanel=false;liquid::DockAnimation dock;~Thread(){for(auto&n:nodes)for(auto&w:n.second.watchers)w.second();}};
     std::map<DWORD,Thread*> threads;SRWLOCK lock=SRWLOCK_INIT;bool modern=false;int host=0;std::atomic<HRESULT> lastError{S_OK};std::atomic<unsigned> writes{0};
     std::atomic<bool> subscribed{false},subscriptionWorker{false};
     std::atomic<unsigned> compatibilityReports{0};
     std::atomic<LONG> notification{S_FALSE};
     void notify(HRESULT hr){if(notification.exchange(hr)!=hr)report(hr);}
     void unregister(InstanceHandle h){if(cache&&h)cache->Unregister(h);}
-    bool wantsSubscription(){if(!cache&&compatibilityReports.load()>=8192)return false;glass::Config c;if(!snapshot(c))return false;DWORD mask=host==0?(glass::Taskbar|glass::Volume|glass::Brightness):host==1?glass::Start:host==2?glass::Notifications:glass::Explorer;return (c.features&mask)!=0;}
+    bool wantsSubscription(){if(!cache&&compatibilityReports.load()>=8192)return false;glass::Config c;if(!snapshot(c))return false;DWORD mask=host==0?(glass::Taskbar|glass::Volume|glass::Brightness|glass::Dock|glass::Explorer):host==1?glass::Start:host==2?glass::Notifications:glass::Explorer;return (c.features&mask)!=0;}
     static LRESULT CALLBACK windowProc(HWND h,UINT msg,WPARAM w,LPARAM l){
         auto t=(Thread*)GetWindowLongPtrW(h,GWLP_USERDATA);
         if(msg==WM_NCCREATE){t=(Thread*)((CREATESTRUCTW*)l)->lpCreateParams;SetWindowLongPtrW(h,GWLP_USERDATA,(LONG_PTR)t);}
         if(t){if(msg==WM_APP+1){auto list=std::move(t->release);t->release.clear();for(auto v:list)t->session->unregister(v);return 0;}
+            if(msg==WM_APP+4){SetTimer(h,8,30,nullptr);return 0;}if(msg==WM_TIMER&&w==8){KillTimer(h,8);t->session->update(*t);return 0;}
             if(msg==refreshMsg){t->session->update(*t);return 0;}
             if(msg==WM_APP+2)return (LRESULT)t->session->writes.load();
             if(msg==WM_APP+3)return (LRESULT)t->session->lastError.load();
@@ -86,7 +90,8 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     }
     Ptr<IInspectable> from(InstanceHandle h){Ptr<IInspectable> p;diag->GetIInspectableFromHandle(h,p.put());return p;}
     void releaseLater(Thread&t,InstanceHandle h){if(cache&&h){bool first=t.release.empty();t.release.push_back(h);if(first)PostMessageW(t.window,WM_APP+1,0,0);}}
-    Ptr<IInspectable> brush(const glass::Config&c,bool transparent){
+    Ptr<IInspectable> brush(const glass::Config&c,bool transparent,InstanceHandle handle,DWORD feature,bool&custom){custom=false;
+        if(!transparent)try{auto target=from(handle);if(target){winrt::Windows::Foundation::IInspectable obj{nullptr};winrt::copy_from_abi(obj,target.p);Ptr<IInspectable> result;if(modern){auto element=obj.try_as<winrt::Microsoft::UI::Xaml::UIElement>();if(element){auto value=winrt::make<liquid::ModernBrush>(element,c,[feature](HRESULT hr){trace("composition material",hr);report(hr,feature);});winrt::get_unknown(value)->QueryInterface(__uuidof(IInspectable),(void**)result.put());}}else{auto element=obj.try_as<winrt::Windows::UI::Xaml::UIElement>();if(element){auto value=winrt::make<liquid::SystemBrush>(element,c,[feature](HRESULT hr){trace("composition material",hr);report(hr,feature);});winrt::get_unknown(value)->QueryInterface(__uuidof(IInspectable),(void**)result.put());}}if(result){custom=true;return result;}}}catch(...){trace("composition brush fallback",winrt::to_hresult());}
         Ptr<XamlReader> reader;const wchar_t*cls=modern?L"Microsoft.UI.Xaml.Markup.XamlReader":L"Windows.UI.Xaml.Markup.XamlReader";
         HSTRING className{};WindowsCreateString(cls,(UINT32)wcslen(cls),&className);HRESULT hr=RoGetActivationFactory(className,ReaderIds[modern?1:0],reinterpret_cast<void**>(reader.put()));
         if(FAILED(hr)&&modern){auto mod=GetModuleHandleW(L"Microsoft.UI.Xaml.dll");auto fn=mod?reinterpret_cast<HRESULT(WINAPI*)(HSTRING,IActivationFactory**)>(GetProcAddress(mod,"DllGetActivationFactory")):nullptr;Ptr<IActivationFactory> factory;if(fn&&SUCCEEDED(fn(className,factory.put())))hr=factory->QueryInterface(ReaderIds[1],reinterpret_cast<void**>(reader.put()));}
@@ -108,30 +113,53 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
         if(local){InstanceHandle value=0;hr=service->GetProperty(h,index,&value);if(FAILED(hr))return false;if(value){old.value=from(value);unregister(value);if(!old.value)return false;}}
         n.saved.emplace(prop,std::move(old));return true;
     }
-    bool set(Node&n,InstanceHandle h,const std::wstring&prop,IInspectable*value){
-        unsigned index=0;if(!save(n,h,prop,index)){report(E_INVALIDARG,glass::feature(n.surface));return false;}
+    bool set(Node&n,InstanceHandle h,const std::wstring&prop,IInspectable*value,bool required=true){
+        unsigned index=0;if(!save(n,h,prop,index)){if(required)report(E_INVALIDARG,glass::feature(n.surface));return false;}
         InstanceHandle v=0;if(value&&FAILED(diag->RegisterInstance(value,&v)))return false;
-        HRESULT hr=service->SetProperty(h,v,index);trace("set property",hr);if(v)unregister(v);if(FAILED(hr)){lastError=hr;report(hr,glass::feature(n.surface));}else{++writes;if(glass::feature(n.surface))report(S_OK,glass::feature(n.surface));}return SUCCEEDED(hr);
+        HRESULT hr=service->SetProperty(h,v,index);trace("set property",hr);if(v)unregister(v);if(FAILED(hr)){lastError=hr;if(required)report(hr,glass::feature(n.surface));}else{++writes;if(required&&!n.composition&&glass::feature(n.surface)&&n.surface!=glass::StartOverlay&&n.surface!=glass::TaskbarOverlay&&n.surface!=glass::StartClear&&n.surface!=glass::NotificationClear&&n.surface!=glass::ExplorerClear)report(S_OK,glass::feature(n.surface));}return SUCCEEDED(hr);
     }
     void restore(Node&n,InstanceHandle h){for(auto i=n.saved.begin();i!=n.saved.end();){auto&v=i->second;HRESULT hr=S_OK;InstanceHandle old=0;
             if(v.local){if(v.value)hr=diag->RegisterInstance(v.value.p,&old);if(SUCCEEDED(hr))hr=service->SetProperty(h,old,v.index);if(old)unregister(old);}else hr=service->ClearProperty(h,v.index);
-            trace("restore property",hr);if(SUCCEEDED(hr))i=n.saved.erase(i);else{lastError=hr;report(hr,glass::feature(n.surface));++i;}}if(n.saved.empty())n.appliedSignature=0;
+            trace("restore property",hr);if(SUCCEEDED(hr))i=n.saved.erase(i);else{lastError=hr;report(hr,glass::feature(n.surface));++i;}}if(n.saved.empty()){for(auto&w:n.watchers)w.second();n.watchers.clear();n.appliedSignature=0;}
+    }
+    Ptr<IInspectable> markup(const std::wstring&xml){
+        Ptr<XamlReader> reader;auto cls=modern?L"Microsoft.UI.Xaml.Markup.XamlReader":L"Windows.UI.Xaml.Markup.XamlReader";HSTRING name{};WindowsCreateString(cls,(UINT32)wcslen(cls),&name);
+        HRESULT hr=RoGetActivationFactory(name,ReaderIds[modern?1:0],(void**)reader.put());
+        if(FAILED(hr)&&modern){auto module=GetModuleHandleW(L"Microsoft.UI.Xaml.dll");auto fn=module?(HRESULT(WINAPI*)(HSTRING,IActivationFactory**))GetProcAddress(module,"DllGetActivationFactory"):nullptr;Ptr<IActivationFactory> factory;if(fn&&SUCCEEDED(fn(name,factory.put())))hr=factory->QueryInterface(ReaderIds[1],(void**)reader.put());}
+        WindowsDeleteString(name);if(FAILED(hr)||!reader)return {};HSTRING text{};WindowsCreateString(xml.c_str(),(UINT32)xml.size(),&text);Ptr<IInspectable> result;reader->Load(text,result.put());WindowsDeleteString(text);return result;
+    }
+    void typed(Node&n,InstanceHandle h,const wchar_t*property,const wchar_t*type,const std::wstring&value){
+        auto prefix=modern?L"Microsoft.UI.Xaml.":L"Windows.UI.Xaml.";std::wstring full=wcscmp(type,L"Double")==0?L"Double":std::wstring(prefix)+type;
+        BSTR t=SysAllocString(full.c_str()),v=SysAllocString(value.c_str());InstanceHandle instance=0;
+        if(SUCCEEDED(service->CreateInstance(t,v,&instance))){auto p=from(instance);if(p)set(n,h,property,p.p,false);unregister(instance);}SysFreeString(t);SysFreeString(v);
+    }
+    void edge(Node&n,InstanceHandle h,const glass::Config&c){
+        bool rectangle=n.surface==glass::TaskbarFill;
+        auto rim=markup(L"<LinearGradientBrush xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" StartPoint=\"0,0\" EndPoint=\"0,1\"><GradientStop Color=\"#80FFFFFF\" Offset=\"0\"/><GradientStop Color=\"#18303030\" Offset=\"0.5\"/><GradientStop Color=\"#60FFFFFF\" Offset=\"1\"/></LinearGradientBrush>");
+        if(rim)set(n,h,rectangle?L"Stroke":L"BorderBrush",rim.p,false);
+        typed(n,h,rectangle?L"StrokeThickness":L"BorderThickness",rectangle?L"Double":L"Thickness",L"1");
+        if(rectangle){typed(n,h,L"RadiusX",L"Double",std::to_wstring(c.radius));typed(n,h,L"RadiusY",L"Double",std::to_wstring(c.radius));}
     }
     void apply(Node&n,InstanceHandle h,const glass::Config&c){
-        if(!glass::active(n.surface,c.features)){restore(n,h);return;}DWORD signature=1|(c.opacity<<1)|(c.radius<<8)|(c.tint<<13)|(c.economy?1u<<15:0);if(n.appliedSignature==signature)return;trace("active surface",(HRESULT)n.surface);
-        auto b=brush(c,n.surface==glass::OsdPlate||n.surface==glass::StartOverlay);if(!b)return;
-        bool applied=set(n,h,n.surface==glass::TaskbarFill?L"Fill":L"Background",b.p);
+        if(n.surface==glass::DockRoot||n.surface==glass::DockIcon){auto&t=thread();if(!(c.features&glass::Dock)||c.economy){t.dock.stop();return;}auto p=from(h);if(p){if(n.surface==glass::DockRoot){if(!t.dock.attach(p.p))report(E_NOINTERFACE,glass::Dock);}else t.dock.add(p.p);if(t.dock.ready())report(S_OK,glass::Dock);}return;}
+        if(!glass::active(n.surface,c.features)){restore(n,h);return;}DWORD signature=1|(c.opacity<<1)|(c.radius<<8)|(c.tint<<13)|(c.economy?1u<<15:0)|(c.blur<<16);if(n.appliedSignature==signature)return;trace("active surface",(HRESULT)n.surface);
+        auto b=brush(c,(n.surface==glass::TaskbarFill&&thread().taskbarPanel)||n.surface==glass::OsdPlate||n.surface==glass::StartOverlay||n.surface==glass::TaskbarOverlay||n.surface==glass::StartClear||n.surface==glass::NotificationClear||n.surface==glass::ExplorerClear,h,glass::feature(n.surface),n.composition);if(!b)return;
+        bool applied=set(n,h,(n.surface==glass::TaskbarFill||n.surface==glass::TaskbarOverlay)?L"Fill":L"Background",b.p);
+        if(applied&&(n.surface==glass::TaskbarRoot||n.surface==glass::TaskbarFill||n.surface==glass::StartPlate||n.surface==glass::NotificationPlate||n.surface==glass::ExplorerPlate))edge(n,h,c);
         // Round only native material plates; never change layout constraints.
-        if(n.surface!=glass::TaskbarFill&&n.surface!=glass::ExplorerPlate&&n.surface!=glass::OsdPlate){
+        if(n.surface==glass::StartPlate||n.surface==glass::NotificationPlate||n.surface==glass::TaskbarRoot||n.surface==glass::VolumePlate||n.surface==glass::BrightnessPlate){
             InstanceHandle r=0;BSTR type=SysAllocString(modern?L"Microsoft.UI.Xaml.CornerRadius":L"Windows.UI.Xaml.CornerRadius");auto text=std::to_wstring(c.radius);BSTR value=SysAllocString(text.c_str());
             if(SUCCEEDED(service->CreateInstance(type,value,&r))){auto p=from(r);if(p)set(n,h,L"CornerRadius",p.p);unregister(r);}SysFreeString(type);SysFreeString(value);
         }
-        if(applied)n.appliedSignature=signature;
+        if(applied){n.appliedSignature=signature;auto property=(n.surface==glass::TaskbarFill||n.surface==glass::TaskbarOverlay)?L"Fill":L"Background";if(!n.watchers.count(property))try{auto p=from(h);auto&t=thread();auto callback=liquid::watch(p.p,modern,property,[&t,h]{if(t.updating)return;auto node=t.nodes.find(h);if(node!=t.nodes.end()){node->second.appliedSignature=0;PostMessageW(t.window,WM_APP+4,0,0);}});if(callback)n.watchers.emplace(property,std::move(callback));}catch(...){trace("watch property",winrt::to_hresult());}}
     }
-    void update(Thread&t){if(t.updating)return;t.updating=true;glass::Config c;if(!snapshot(c))c.features=0;
-        for(auto i=t.nodes.begin();i!=t.nodes.end();){Ptr<IInspectable> p;if(i->second.weak) i->second.weak->Resolve(__uuidof(IInspectable),p.put());if(!p){i=t.nodes.erase(i);continue;}
+    void update(Thread&t){if(t.updating)return;t.updating=true;glass::Config c;if(!snapshot(c))c.features=0;if(!(c.features&glass::Dock)||c.economy)t.dock.stop();
+        for(auto i=t.nodes.begin();i!=t.nodes.end();){Ptr<IInspectable> p;if(i->second.weak) i->second.weak->Resolve(__uuidof(IInspectable),p.put());if(!p){for(auto&w:i->second.watchers)w.second();i=t.nodes.erase(i);continue;}
             InstanceHandle h=0;if(SUCCEEDED(diag->RegisterInstance(p.p,&h))){apply(i->second,h,c);unregister(h);}
-            if(!glass::active(i->second.surface,c.features)&&i->second.saved.empty())i=t.nodes.erase(i);else ++i;}
+            // Keep only weak descriptors for inactive surfaces. Another switch
+            // can be enabled while this diagnostics subscription is already on;
+            // Windows does not enumerate the existing tree a second time then.
+            ++i;}
         t.updating=false;ensureSubscription();
     }
 public:
@@ -159,12 +187,14 @@ public:
     }
     HRESULT STDMETHODCALLTYPE OnVisualTreeChange(ParentChildRelation relation,VisualElement element,VisualMutationType mutation)override{
         try{auto&t=thread();if(!cache&&++compatibilityReports>=8192)ensureSubscription();if(mutation==Add){auto surface=glass::identify(element.Name?element.Name:L"",element.Type?element.Type:L"",host);
+                if(host==0&&surface==glass::NoSurface)surface=glass::identify(element.Name?element.Name:L"",element.Type?element.Type:L"",3);
+                if(host==0&&surface==glass::NoSurface&&element.Name&&wcscmp(element.Name,L"RootGrid")==0&&relation.Parent){auto parent=from(relation.Parent);HSTRING type{};if(parent&&SUCCEEDED(parent->GetRuntimeClassName(&type))){auto name=WindowsGetStringRawBuffer(type,nullptr);if(name&&wcscmp(name,L"Taskbar.TaskbarFrame")==0){surface=glass::TaskbarRoot;t.taskbarPanel=true;}WindowsDeleteString(type);}}
                 if(surface!=glass::NoSurface)trace("candidate",(HRESULT)surface);
                 if(surface!=glass::NoSurface){auto p=from(element.Handle);Ptr<IWeakReferenceSource> source;if(p&&SUCCEEDED(p->QueryInterface(__uuidof(IWeakReferenceSource),reinterpret_cast<void**>(source.put())))){
-                    Node n;n.surface=surface;source->GetWeakReference(n.weak.put());auto old=t.nodes.find(element.Handle);if(old!=t.nodes.end())restore(old->second,element.Handle);t.nodes[element.Handle]=std::move(n);
+                    Node n;n.surface=surface;source->GetWeakReference(n.weak.put());auto old=t.nodes.find(element.Handle);if(old!=t.nodes.end()){t.updating=true;restore(old->second,element.Handle);t.updating=false;if(!old->second.saved.empty()){releaseLater(t,element.Handle);return S_OK;}}t.nodes[element.Handle]=std::move(n);
                     glass::Config c;if(snapshot(c)){t.updating=true;apply(t.nodes[element.Handle],element.Handle,c);t.updating=false;}
                 }}releaseLater(t,element.Handle);releaseLater(t,relation.Parent);
-            }else if(mutation==Remove){auto i=t.nodes.find(element.Handle);if(i!=t.nodes.end()){restore(i->second,element.Handle);t.nodes.erase(i);}releaseLater(t,element.Handle);}
+            }else if(mutation==Remove){auto i=t.nodes.find(element.Handle);if(i!=t.nodes.end()){t.updating=true;restore(i->second,element.Handle);t.updating=false;for(auto&w:i->second.watchers)w.second();t.nodes.erase(i);}releaseLater(t,element.Handle);}
         }catch(...){lastError=E_FAIL;}return S_OK;
     }
     HRESULT STDMETHODCALLTYPE OnElementStateChanged(InstanceHandle,VisualElementState,LPCWSTR)override{return S_OK;}
@@ -185,6 +215,20 @@ DWORD WINAPI attachFramework(void*arg){int modern=(int)(INT_PTR)arg;CoInitialize
 }
 extern "C" HRESULT WINAPI DllGetClassObject(REFCLSID id,REFIID iid,void**p){if(id!=glass::TapId)return CLASS_E_CLASSNOTAVAILABLE;auto f=new Factory;auto hr=f->QueryInterface(iid,p);f->Release();return hr;}
 extern "C" HRESULT WINAPI DllCanUnloadNow(){return S_FALSE;}
+extern "C" __declspec(dllexport) HRESULT WINAPI GlassGraphicsTest(){
+    struct QueueOptions{DWORD size;int thread,apartment;};
+    HMODULE messaging=LoadLibraryExW(L"CoreMessaging.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);if(!messaging)return HRESULT_FROM_WIN32(GetLastError());
+    auto create=(HRESULT(WINAPI*)(QueueOptions,void**))GetProcAddress(messaging,"CreateDispatcherQueueController");Ptr<IUnknown> queue;
+    HRESULT hr=create?create({sizeof(QueueOptions),2,2},(void**)queue.put()):E_NOINTERFACE;if(FAILED(hr))return hr;
+    try{auto gaussian=winrt::make_self<liquid::Effect>();GUID id{};UINT count=0;
+        if(FAILED(gaussian->GetEffectId(&id))||id!=CLSID_D2D1GaussianBlur||FAILED(gaussian->GetPropertyCount(&count))||count!=3)return E_FAIL;
+        for(UINT i=0;i<3;++i){Ptr<IUnknown> value;if(FAILED(gaussian->GetProperty(i,value.put()))||!value)return E_FAIL;}
+        auto compositor=winrt::Windows::UI::Composition::Compositor();glass::Config config;
+        auto brush=liquid::makeGlass(compositor,config);if(!brush)return E_FAIL;
+        config.blur=0;config.opacity=5;auto clear=liquid::makeGlass(compositor,config);if(!clear)return E_FAIL;
+        config.blur=40;config.opacity=90;config.tint=2;auto dark=liquid::makeGlass(compositor,config);return dark?S_OK:E_FAIL;
+    }catch(...){return winrt::to_hresult();}
+}
 void bootstrap(DWORD owner){if(connect(owner)){
         AcquireSRWLockShared(&sessionsLock);for(auto s:sessions)s->ensureSubscription();ReleaseSRWLockShared(&sessionsLock);
         for(int modern=0;modern<2;++modern)if(GetModuleHandleW(modern?L"Microsoft.Internal.FrameworkUdk.dll":L"Windows.UI.Xaml.dll")&&!injecting[modern].exchange(true)){HANDLE t=CreateThread(nullptr,0,attachFramework,(void*)(INT_PTR)modern,0,nullptr);if(t)CloseHandle(t);else injecting[modern]=false;}

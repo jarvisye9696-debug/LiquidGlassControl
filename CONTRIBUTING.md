@@ -30,6 +30,7 @@ git push -u origin HEAD
 Requirements: Windows 11 x64, CMake 3.20+, Visual Studio 2022 Build Tools with Desktop development with C++ and the Windows SDK. Windhawk is not required for compilation, self-tests or the experimental standalone engine.
 
 ```powershell
+./prepare-winrt.ps1
 cmake -S . -B build/cmake -A x64
 cmake --build build/cmake --config Release
 $test = Start-Process build/cmake/Release/LiquidGlassControl.exe -ArgumentList '--self-test' -PassThru -Wait
@@ -45,7 +46,7 @@ Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk comp
 | File | Responsibility |
 |---|---|
 | `main.cpp` | Window lifecycle, settings, applying/restoring effects, self-test |
-| `control_ui.h` | Controls and Chinese/English captions |
+| `control_ui.h` | Controls and five-language captions |
 | `ui_style.h` | Fonts and GDI rendering |
 | `native_osd.h`, `native_switches.h` | Native volume/brightness styles and restoration journals |
 | `shell_materials.h`, `shell_materials_test.h` | Independent shell background rules, journals and isolated registry tests |
@@ -54,8 +55,8 @@ Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk comp
 
 ## Validation
 
-- Keep every user-facing caption paired in Chinese and English; first launch defaults to English, saved choices persist.
-- Keep standalone rules material-only; preserve taskbar geometry and work area. Do not intercept media keys or add duplicate indicators.
+- Keep every user-facing caption in all five languages; first launch defaults to English, saved choices persist.
+- Glass rules preserve taskbar geometry. Dock transforms icons visually; smart hide is a separate, journaled opt-in feature. Do not intercept media keys or add duplicate indicators.
 - Preserve custom styles and recovery journals; restore original theme and module activation state when Off.
 - The self-test uses local fixtures and temporary files; it does not apply live system styles. DWM assertions are skipped where unsupported.
 - Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and whether other styling tools were running. Include memory in injected processes.

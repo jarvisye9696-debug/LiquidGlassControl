@@ -1,7 +1,7 @@
 param([switch]$SkipBuild, [string]$ExecutablePath, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$version = '0.10.1'
+$version = '0.11.0'
 $name = "LiquidGlassControl-$version-win11-x64"
 $dist = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'dist' }
 $stage = Join-Path $PSScriptRoot ('build\package-' + [guid]::NewGuid().ToString('N'))
@@ -26,6 +26,7 @@ if ($test.ExitCode -ne 0) { throw "Release self-test failed: $($test.ExitCode)" 
 Get-Content -LiteralPath (Join-Path $stage 'self-test.txt')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Quick Start.txt') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Create Desktop Shortcut.cmd') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Third Party Notices.txt') -Destination $stage
 # Explicit file list prevents shipping settings, test reports, personal data or recovery journals.
 $files = @($exe, (Join-Path $stage 'Quick Start.txt'), (Join-Path $stage 'Create Desktop Shortcut.cmd'))
 $zip = Join-Path $dist ($name + '.zip')

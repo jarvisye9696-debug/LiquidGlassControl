@@ -29,11 +29,11 @@ void applyColorTheme(int index,bool save){
     if(save){auto value=std::to_wstring(colorTheme);WritePrivateProfileStringW(L"UI",L"ColorTheme",value.c_str(),iniPath.c_str());}
 }
 void createFonts(){
-    if(fontLanguage==(english?1:0)&&font)return;
+    if(fontLanguage==int(l10n::current)&&font)return;
     HFONT old=font,oldHeading=headingFont,oldAction=actionFont;
-    const wchar_t*face=english?L"Segoe UI":L"Microsoft YaHei UI";
+    const wchar_t*face=l10n::current==l10n::Simplified?L"Microsoft YaHei UI":l10n::current==l10n::Traditional?L"Microsoft JhengHei UI":L"Segoe UI";
     auto make=[&](int size,int weight){return CreateFontW(-MulDiv(size,dpi,96),0,0,0,weight,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,face);};
-    font=make(15,FW_NORMAL);headingFont=make(23,FW_SEMIBOLD);actionFont=make(15,FW_SEMIBOLD);fontLanguage=english?1:0;
+    font=make(15,FW_NORMAL);headingFont=make(23,FW_SEMIBOLD);actionFont=make(15,FW_SEMIBOLD);fontLanguage=int(l10n::current);
     if(!cardBrush)cardBrush=CreateSolidBrush(RGB(255,255,255));
     EnumChildWindows(mainWindow,[](HWND child,LPARAM)->BOOL{int id=GetDlgCtrlID(child);const wchar_t*button=L"Button";wchar_t cls[32]{};GetClassNameW(child,cls,32);HFONT f=id==Header?headingFont:_wcsicmp(cls,button)==0?actionFont:font;SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(f),TRUE);return TRUE;},0);
     if(old)DeleteObject(old);if(oldHeading)DeleteObject(oldHeading);if(oldAction)DeleteObject(oldAction);

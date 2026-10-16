@@ -12,6 +12,9 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
+      - name: Prepare Windows framework headers
+        shell: pwsh
+        run: ./prepare-winrt.ps1
       - name: Configure
         run: cmake -S . -B build/cmake -A x64
       - name: Build

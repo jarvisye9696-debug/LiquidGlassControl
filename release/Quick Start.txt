@@ -1,16 +1,18 @@
-Liquid Glass Control 0.10.1 — Experimental / 实验版
+Liquid Glass Control 0.11.0 — Experimental / 实验版
 Windows 11 x64 · Portable / 免安装
 
 中文
 1. 解压到可写目录，双击 LiquidGlassControl.exe。不要在 ZIP 内运行。
 2. 可选：运行 Create Desktop Shortcut.cmd 创建桌面快捷方式。
-3. 首次默认英文，在 Settings → General → Interface language 选择中文。
+3. 首次默认英文，在 Settings → General → Interface language 选择 English / 简体中文 / 繁體中文 / Polski / Tiếng Việt。
 4. 系统玻璃页独立开关音量、亮度、任务栏、开始菜单、通知中心和资源管理器。
-5. 设置 → 玻璃效果：调整着色强度、深浅色、圆角和电池省电回退。
+5. Dock 动画和任务栏智能隐藏默认关闭，可在系统玻璃页单独开启。
+   设置 → 玻璃效果：分别调整模糊强度、着色、圆角和省电回退。
 6. 关闭窗口后保留托盘。卸载前使用 设置 → 关于 → 还原并退出。
 
 独立 XAML 引擎无需 Windhawk，运行时在程序旁释放引擎 DLL，请保留它。
-本版保留任务栏原尺寸和排列，不再套用改变布局的完整主题。
+玻璃开关保留任务栏布局；智能隐藏是独立功能，关闭会恢复原设置。
+测试本程序时请暂时停用 Windhawk 中对应的 Styler，避免诊断接口冲突。
 经典文件列表和部分自绘区域可能仍不透明，尚非完整 File Explorer Styler 效果。
 实验版本仍需实机验证。程序未签名，可能被应用程序控制策略拦截。
 升级先恢复本程序备份的旧 Windhawk 配置；这一步可能请求管理员授权。
@@ -21,11 +23,13 @@ English
 2. Optional: run Create Desktop Shortcut.cmd. Keep the folder in place.
 3. Language: Settings → General → Interface language. Your choice is saved.
 4. System glass: independent volume, brightness, taskbar, Start, notification and Explorer switches.
-5. Settings → Glass: tint strength, light/dark tint, corners and battery-friendly fallback.
+5. Dock hover and smart taskbar hide are separate, off-by-default switches.
+   Settings → Glass: blur, tint, corners and battery-friendly fallback.
 6. Closing keeps the app in the tray. Before removal, use Settings → About → Restore and exit.
 
 No Windhawk required. The embedded engine DLL is extracted beside the EXE at runtime.
-Taskbar geometry is preserved. Classic file lists and custom app content may stay opaque.
+Glass preserves taskbar geometry; smart hide separately changes auto-hide and restores it on disable.
+Disable competing Windhawk Stylers before testing. Classic file lists and custom app content may stay opaque.
 This is not the complete File Explorer Styler. Live Windows 11 validation is pending.
 Unsigned builds may be blocked by application-control policy.
 Upgrade restores only the Windhawk settings saved by this app; that migration may request administrator approval.

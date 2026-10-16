@@ -15,6 +15,9 @@ jobs:
           $script = Get-Content package.ps1 -Raw
           $version = [regex]::Match($script, '(?m)^\$version = ''([^'']+)''').Groups[1].Value
           if (-not $version -or $env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag must match package.ps1 version' }
+      - name: Prepare Windows framework headers
+        shell: pwsh
+        run: ./prepare-winrt.ps1
       - name: Configure
         run: cmake -S . -B build/cmake -A x64
       - name: Build
