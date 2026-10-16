@@ -25,7 +25,7 @@ constexpr wchar_t ClassName[]=L"LiquidGlass.Control";
 enum {Language=101,Refresh,Apply,Restore,Pause,Scope,Material,Corners,List=113,Status,Note,
     Header=130,Pages,Compatibility,OverlayNote=145,SettingsNote=152,ExitApp,
     NativeApply=160,NativeRestore,NativeInfo,MotionEnabled,VolumeHeading=166,BrightnessHeading,
-    VolumeOn=180,VolumeOff,BrightnessOn,BrightnessOff,SettingsPages=190,LanguageLabel,StartupAnimation,MotionText,CompatText,AboutText};
+    VolumeOn=180,VolumeOff,BrightnessOn,BrightnessOff,SettingsPages=190,LanguageLabel,StartupAnimation,MotionText,CompatText,AboutText,ColorThemeLabel,ColorTheme};
 HWND mainWindow{}, language{}, scope{}, material{}, corners{}, list{}, status{}, note{};
 HFONT font{}; HBRUSH background{}; NOTIFYICONDATAW tray{};
 bool english=true,enabled=false,busy=false; UINT dpi=96;
@@ -301,6 +301,7 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
     case WM_NOTIFY:if(reinterpret_cast<NMHDR*>(l)->code==TCN_SELCHANGE){if(reinterpret_cast<NMHDR*>(l)->idFrom==Pages)selectPage(TabCtrl_GetCurSel(tabs));else if(reinterpret_cast<NMHDR*>(l)->idFrom==SettingsPages)selectSettingsPage(TabCtrl_GetCurSel(settingsTabs));}return 0;
     case WM_COMMAND:switch(LOWORD(w)){
         case Language:if(HIWORD(w)==CBN_SELCHANGE){english=selection(language)==1;saveLanguage();localize();}break;
+        case ColorTheme:if(HIWORD(w)==CBN_SELCHANGE)applyColorTheme(selection(GetDlgItem(h,ColorTheme)),true);break;
         case List:if(HIWORD(w)==LBN_SELCHANGE)updateCompatibility();break;
         case Scope:if(HIWORD(w)==CBN_SELCHANGE)updateCompatibility();break;
         case MotionEnabled:motionEnabled=SendMessageW(GetDlgItem(h,MotionEnabled),BM_GETCHECK,0,0)==BST_CHECKED;WritePrivateProfileStringW(L"Native",L"Motion",motionEnabled?L"1":L"0",iniPath.c_str());break;
@@ -342,7 +343,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
     english=readEnglish(iniPath);
     motionEnabled=GetPrivateProfileIntW(L"Native",L"Motion",1,iniPath.c_str())!=0;
     volumeOn=GetPrivateProfileIntW(L"Native",L"VolumeOn",nativeBackupExists()?1:0,iniPath.c_str())!=0;brightnessOn=GetPrivateProfileIntW(L"Native",L"BrightnessOn",nativeBackupExists()?1:0,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
-    background=CreateSolidBrush(RGB(246,248,252));WNDCLASSEXW c{};c.cbSize=sizeof(c);c.lpfnWndProc=proc;c.hInstance=instance;c.lpszClassName=ClassName;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.hIcon=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);c.hIconSm=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);c.hbrBackground=background;
+    applyColorTheme(GetPrivateProfileIntW(L"UI",L"ColorTheme",0,iniPath.c_str()),false);WNDCLASSEXW c{};c.cbSize=sizeof(c);c.lpfnWndProc=proc;c.hInstance=instance;c.lpszClassName=ClassName;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.hIcon=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);c.hIconSm=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);c.hbrBackground=background;
     if(!RegisterClassExW(&c)){DeleteObject(background);CloseHandle(mutex);return 1;}
     RECT size={0,0,MulDiv(790,dpi,96),MulDiv(630,dpi,96)};AdjustWindowRectEx(&size,WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,FALSE,0);
     mainWindow=CreateWindowExW(0,ClassName,L"Liquid Glass",WS_CLIPCHILDREN|WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,size.right-size.left,size.bottom-size.top,nullptr,nullptr,instance,nullptr);
