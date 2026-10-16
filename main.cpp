@@ -67,6 +67,7 @@ void message(const std::wstring& s){SetWindowTextW(status,s.c_str());}
 std::wstring classOf(HWND h){wchar_t c[256]{};GetClassNameW(h,c,256);return c;}
 std::wstring executable(DWORD pid){HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,pid);wchar_t path[32768]{};DWORD n=32768;if(p){if(!QueryFullProcessImageNameW(p,0,path,&n))path[0]=0;CloseHandle(p);}std::wstring s=path;auto i=s.find_last_of(L"\\/");return i==std::wstring::npos?s:s.substr(i+1);}
 bool same(const std::wstring&a,const std::wstring&b){return _wcsicmp(a.c_str(),b.c_str())==0;}
+bool systemExecutable(const std::wstring&exe){return same(exe,L"StartMenuExperienceHost.exe")||same(exe,L"SearchHost.exe")||same(exe,L"SearchApp.exe")||same(exe,L"ShellExperienceHost.exe")||same(exe,L"ShellHost.exe");}
 bool usesExplorer(int selectedMode,const std::wstring&exe){return selectedMode==1||selectedMode==2||(selectedMode==0&&same(exe,L"explorer.exe"));}
 bool explorerBackupExists(){auto dir=iniPath.substr(0,iniPath.find_last_of(L"\\")+1);return GetFileAttributesW((dir+L"explorer-background-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES;}
 bool nativeBackupExists(){auto dir=iniPath.substr(0,iniPath.find_last_of(L"\\")+1);return GetFileAttributesW((dir+L"native-osd-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES||GetFileAttributesW((dir+L"native-osd-switches.bin").c_str())!=INVALID_FILE_ATTRIBUTES;}
@@ -114,7 +115,7 @@ bool applyWindow(HWND h){
     auto targetClass=classOf(h);
     if(shellClass(targetClass))return false;
     auto targetExe=executable(targetPid);
-    if(same(targetExe,L"StartMenuExperienceHost.exe")||same(targetExe,L"SearchHost.exe")||same(targetExe,L"SearchApp.exe")||same(targetExe,L"ShellExperienceHost.exe"))return false;
+    if(systemExecutable(targetExe))return false;
     auto it=originals.find(h);
     if(it!=originals.end()&&!valid(h,it->second)){originals.erase(it);it=originals.end();}
     if(it==originals.end()){
@@ -138,7 +139,7 @@ BOOL CALLBACK enumerate(HWND h,LPARAM data){
     wchar_t title[512]{};GetWindowTextW(h,title,512);if(!title[0])return TRUE;
     std::wstring exe=executable(pid);if(exe.empty())return TRUE;
     // System surfaces are never application targets.
-    if(same(exe,L"StartMenuExperienceHost.exe")||same(exe,L"SearchHost.exe")||same(exe,L"SearchApp.exe")||same(exe,L"ShellExperienceHost.exe"))return TRUE;
+    if(systemExecutable(exe))return TRUE;
     out.push_back({h,pid,title,exe,cls});return TRUE;
 }
 std::vector<Entry> collect(){std::vector<Entry> v;EnumWindows(enumerate,reinterpret_cast<LPARAM>(&v));return v;}
@@ -283,6 +284,7 @@ void show(){
 }
 void menu(){HMENU m=CreatePopupMenu();AppendMenuW(m,MF_STRING,1,tr(L"打开设置",L"Open settings"));AppendMenuW(m,MF_STRING,2,tr(L"还原",L"Restore"));AppendMenuW(m,MF_STRING,3,tr(L"还原并退出",L"Restore and exit"));POINT p;GetCursorPos(&p);SetForegroundWindow(mainWindow);int n=TrackPopupMenu(m,TPM_RETURNCMD|TPM_RIGHTBUTTON,p.x,p.y,0,mainWindow,nullptr);DestroyMenu(m);if(n==1)show();if(n==2)restoreAll();if(n==3)restoreAll(true);PostMessageW(mainWindow,WM_NULL,0,0);}
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
+    static UINT engineStatus=RegisterWindowMessageW(glass::StatusMessage);if(msg==engineStatus){if(glassConfig.features)message(FAILED((HRESULT)l)?tr(L"系统材质连接失败，效果未确认。请查看设置 → 兼容性。",L"Shell material connection failed; effect unconfirmed. See Settings > Compatibility."):tr(L"已连接系统材质面板，请打开对应区域确认效果。",L"Connected to a shell material panel. Open the surface to confirm its appearance."));return 0;}
     static UINT restart=RegisterWindowMessageW(L"TaskbarCreated");if(msg==restart){Shell_NotifyIconW(NIM_ADD,&tray);Shell_NotifyIconW(NIM_SETVERSION,&tray);if(glassConfig.features)engine.discover();return 0;}
     switch(msg){
     case WM_PAINT:paintChrome(h);return 0;
@@ -309,6 +311,7 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
         }return 0;
     case WM_HSCROLL:if((HWND)l==GetDlgItem(h,OpacitySlider)||(HWND)l==GetDlgItem(h,RadiusSlider)){glassConfig.opacity=(DWORD)SendMessageW(GetDlgItem(h,OpacitySlider),TBM_GETPOS,0,0);glassConfig.radius=(DWORD)SendMessageW(GetDlgItem(h,RadiusSlider),TBM_GETPOS,0,0);updateEffectLabels();if(LOWORD(w)==TB_ENDTRACK||LOWORD(w)==TB_THUMBPOSITION||LOWORD(w)==TB_LINEUP||LOWORD(w)==TB_LINEDOWN||LOWORD(w)==TB_PAGEUP||LOWORD(w)==TB_PAGEDOWN)applyGlass(false);}return 0;
     case WM_POWERBROADCAST:if(w==PBT_POWERSETTINGCHANGE||w==PBT_APMPOWERSTATUSCHANGE)applyGlass(false);return TRUE;
+    case WM_SETTINGCHANGE:case WM_THEMECHANGED:if(engineReady)applyGlass(false);break;
     case WM_TIMER:if(w==4){float t=std::min(1.f,(GetTickCount64()-startupTime)/180.f),ease=1-powf(1-t,3);SetLayeredWindowAttributes(h,0,(BYTE)(255*ease),LWA_ALPHA);SetWindowPos(h,nullptr,startupRect.left,startupRect.top+(int)((1-ease)*MulDiv(12,dpi,96)),0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);if(t>=1){KillTimer(h,4);SetWindowLongPtrW(h,GWL_EXSTYLE,GetWindowLongPtrW(h,GWL_EXSTYLE)&~WS_EX_LAYERED);RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);}}else if(w==3){KillTimer(h,3);sync(false);if(glassConfig.features)engine.discover();}else if(w==2)pollMigration();return 0;
     case WM_APP+1:if(LOWORD(l)==WM_CONTEXTMENU)menu();else if(LOWORD(l)==NIN_SELECT||LOWORD(l)==NIN_KEYSELECT)show();return 0;
     case WM_APP+2:show();return 0;

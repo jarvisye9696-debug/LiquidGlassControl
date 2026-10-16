@@ -29,7 +29,8 @@ void applyGlass(bool discover){
     if(!engineReady||migrationJob||migrationNeeded()){updateNativeInfo();return;}
     glassConfig.features=(volumeOn?glass::Volume:0)|(brightnessOn?glass::Brightness:0)|(shellOn[0]?glass::Taskbar:0)|(shellOn[1]?glass::Start:0)|(shellOn[2]?glass::Notifications:0)|(explorerOn?glass::Explorer:0);
     SYSTEM_POWER_STATUS power{};GetSystemPowerStatus(&power);glassConfig.economy=batteryFriendly&&(power.ACLineStatus==0||power.SystemStatusFlag==1);
-    engine.publish(glassConfig);if(discover)engine.discover();else engine.broadcast();
+    auto effective=glassConfig;HIGHCONTRASTW high{};high.cbSize=sizeof(high);if(SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(high),&high,0)&&(high.dwFlags&HCF_HIGHCONTRASTON))effective.features=0;
+    engine.publish(effective);if(discover)engine.discover();else engine.broadcast();
     observeWindows();
     WritePrivateProfileStringW(L"Glass",L"Features",std::to_wstring(glassConfig.features).c_str(),iniPath.c_str());
     WritePrivateProfileStringW(L"Glass",L"Opacity",std::to_wstring(glassConfig.opacity).c_str(),iniPath.c_str());

@@ -6,6 +6,7 @@ constexpr DWORD Magic=0x4c474531, Version=1;
 constexpr wchar_t ThreadClass[]=L"LiquidGlass.Engine.Thread.v1";
 constexpr wchar_t AttachMessage[]=L"LiquidGlass.Engine.Attach.v1";
 constexpr wchar_t RefreshMessage[]=L"LiquidGlass.Engine.Refresh.v1";
+constexpr wchar_t StatusMessage[]=L"LiquidGlass.Engine.Status.v1";
 constexpr CLSID TapId={0x973361c7,0xcbe9,0x4da4,{0x9c,0x96,0x3b,0x70,0x18,0x3b,0xa1,0x61}};
 enum Feature:DWORD {Volume=1,Brightness=2,Taskbar=4,Start=8,Notifications=16,Explorer=32};
 struct Config {

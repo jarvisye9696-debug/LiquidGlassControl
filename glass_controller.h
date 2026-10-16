@@ -10,7 +10,7 @@ class Controller {
     std::wstring process(DWORD id){auto found=processes.find(id);if(found!=processes.end())return found->second;wchar_t path[32768]{};DWORD size=32768;HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,id);if(p){QueryFullProcessImageNameW(p,0,path,&size);CloseHandle(p);}std::wstring value=path;auto at=value.find_last_of(L"\\");if(at!=std::wstring::npos)value.erase(0,at+1);return processes[id]=value;}
     bool target(HWND h){DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid==GetCurrentProcessId())return false;auto exe=process(pid);wchar_t cls[128]{};GetClassNameW(h,cls,128);DWORD f=data?data->features:0;
         if(_wcsicmp(exe.c_str(),L"explorer.exe")==0){if((f&(Volume|Brightness|Taskbar))&&(wcscmp(cls,L"Shell_TrayWnd")==0||wcscmp(cls,L"Shell_SecondaryTrayWnd")==0||wcscmp(cls,L"XamlExplorerHostIslandWindow")==0))return true;return (f&Explorer)&&(wcscmp(cls,L"CabinetWClass")==0||wcscmp(cls,L"ExploreWClass")==0);}
-        return ((f&Start)&&_wcsicmp(exe.c_str(),L"StartMenuExperienceHost.exe")==0)||((f&Notifications)&&_wcsicmp(exe.c_str(),L"ShellExperienceHost.exe")==0);
+        return ((f&Start)&&_wcsicmp(exe.c_str(),L"StartMenuExperienceHost.exe")==0)||((f&Notifications)&&(_wcsicmp(exe.c_str(),L"ShellExperienceHost.exe")==0||_wcsicmp(exe.c_str(),L"ShellHost.exe")==0));
     }
     void attachWindow(HWND h){DWORD tid=GetWindowThreadProcessId(h,nullptr);if(!tid||threads.count(tid))return;auto installed=SetWindowsHookExW(WH_CALLWNDPROC,hook,module,tid);if(!installed){failed=true;return;}
         DWORD_PTR answer=0;if(SendMessageTimeoutW(h,attach,GetCurrentProcessId(),0,SMTO_ABORTIFHUNG|SMTO_BLOCK,300,&answer))threads.insert(tid);else failed=true;UnhookWindowsHookEx(installed);
