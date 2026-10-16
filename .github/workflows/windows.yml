@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: cmake -S . -B build/cmake -A x64
       - name: Build
@@ -20,7 +20,7 @@ jobs:
         shell: pwsh
         run: ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
       - name: Upload portable package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LiquidGlassControl-win11-x64
           path: dist/*
