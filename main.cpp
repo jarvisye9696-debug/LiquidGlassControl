@@ -21,6 +21,8 @@
 #include "native_switches.h"
 #include "shell_materials.h"
 #include "shell_materials_test.h"
+#include "full_themes.h"
+#include "full_themes_test.h"
 
 namespace {
 constexpr wchar_t ClassName[]=L"LiquidGlass.Control";
@@ -64,13 +66,13 @@ bool usesExplorer(int selectedMode,const std::wstring&exe){return selectedMode==
 bool explorerBackupExists(){auto dir=iniPath.substr(0,iniPath.find_last_of(L"\\")+1);return GetFileAttributesW((dir+L"explorer-background-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES;}
 bool nativeBackupExists(){auto dir=iniPath.substr(0,iniPath.find_last_of(L"\\")+1);return GetFileAttributesW((dir+L"native-osd-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES||GetFileAttributesW((dir+L"native-osd-switches.bin").c_str())!=INVALID_FILE_ATTRIBUTES;}
 std::wstring settingsDir(){return iniPath.substr(0,iniPath.find_last_of(L"\\")+1);}
-bool shellBackupExists(){for(int i=0;i<3;++i)if(shell_materials::exists(i,settingsDir()))return true;return false;}
+bool shellBackupExists(){for(int i=0;i<3;++i)if(full_themes::pending(i,settingsDir())||shell_materials::exists(i,settingsDir()))return true;return false;}
 void updateNativeInfo(){
     bool pending=nativeJob||explorerJob||shellJob;
-    if(nativeInfo)SetWindowTextW(nativeInfo,pending?tr(L"正在更新，请稍候……",L"Updating, please wait..."):tr(L"音量/亮度沿用原生提示条；新增开关关闭时恢复原样式。",L"Uses native indicators. New surface switches restore originals when Off."));
+    if(nativeInfo)SetWindowTextW(nativeInfo,pending?tr(L"正在更新，请稍候……",L"Updating, please wait..."):tr(L"完整主题包含布局与尺寸；关闭后恢复原主题及模组状态。",L"Full themes include layout and sizing. Off restores the prior theme/module state."));
     int ids[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle};bool states[]={volumeOn,brightnessOn,shellOn[0],shellOn[1],shellOn[2]};
-    for(int i=0;i<5;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&(i<2||shell_materials::available(i-2)||shell_materials::exists(i-2,settingsDir())));InvalidateRect(h,nullptr,FALSE);}
-    const wchar_t* modules[]={L"Taskbar Styler",L"Start Menu Styler",L"Notification Center Styler"};int hints[]={TaskbarHint,StartHint,NotificationHint};for(int i=0;i<3;++i){bool ready=shell_materials::available(i);std::wstring hint=ready?tr(L"已就绪 · 仅调整背景材质",L"Ready · Background material only"):std::wstring(tr(L"请安装并启用：",L"Install and enable: "))+modules[i];SetWindowTextW(GetDlgItem(mainWindow,hints[i]),hint.c_str());}
+    for(int i=0;i<5;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&(full_themes::installed(i<2?0:i-2)||(i<2?nativeBackupExists():full_themes::pending(i-2,settingsDir())||shell_materials::exists(i-2,settingsDir()))));InvalidateRect(h,nullptr,FALSE);}
+    const wchar_t* modules[]={L"Taskbar Styler",L"Start Menu Styler",L"Notification Center Styler"};int hints[]={TaskbarHint,StartHint,NotificationHint};for(int i=0;i<3;++i){bool ready=full_themes::installed(i);std::wstring hint=ready?tr(L"LiquidGlass 完整主题 · 开启时启用对应模组",L"LiquidGlass full theme · Enables the installed mod"):std::wstring(tr(L"请安装：",L"Install: "))+modules[i];SetWindowTextW(GetDlgItem(mainWindow,hints[i]),hint.c_str());}
 }
 bool shellClass(const std::wstring& c){return c==L"Shell_TrayWnd"||c==L"Shell_SecondaryTrayWnd"||c==L"Progman"||c==L"WorkerW"||c==L"XamlExplorerHostIslandWindow";}
 bool valid(HWND h,const Snapshot& s){DWORD pid=0;GetWindowThreadProcessId(h,&pid);return IsWindow(h)&&pid==s.pid&&classOf(h)==s.cls&&GetPropW(h,L"LiquidGlass.Control.Owner")==mainWindow;}
@@ -227,7 +229,7 @@ void configureNative(bool restore){
     wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
     if(restore&&!nativeBackupExists()){updateNativeInfo();return;}
     int mask=restore?0:requestedMask>=0?requestedMask:((volumeOn?1:0)|(brightnessOn?2:0));requestedMask=mask;
-    std::wstring command=L"--native-switch-"+std::to_wstring(mask)+(motionEnabled?L"":L"-static");
+    std::wstring command=restore?L"--native-restore":L"--native-switch-"+std::to_wstring(mask)+(motionEnabled?L"":L"-static");
     SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.hwnd=mainWindow;info.lpVerb=L"runas";info.lpFile=exe;info.lpParameters=command.c_str();info.nShow=SW_HIDE;
     if(!ShellExecuteExW(&info)){requestedMask=-1;exitAfterRestore=false;restoreSequence=false;message(tr(L"授权已取消，原生提示条操作未完成。",L"Approval canceled. Native indicator operation incomplete."));return;}
     nativeJob=info.hProcess;nativeRestoring=restore||mask==0;for(int id:{NativeApply,NativeRestore,Apply,Restore})EnableWindow(GetDlgItem(mainWindow,id),FALSE);updateNativeInfo();
@@ -256,9 +258,9 @@ void pollShell(){
     DWORD code=1;GetExitCodeProcess(shellJob,&code);CloseHandle(shellJob);shellJob=nullptr;
     for(int id:{Apply,Restore,ExitApp})EnableWindow(GetDlgItem(mainWindow,id),TRUE);
     // The journal is authoritative across restarts and partial restoration failures.
-    for(int i=0;i<3;++i)shellOn[i]=shell_materials::configured(i,settingsDir());
+    for(int i=0;i<3;++i)shellOn[i]=full_themes::configured(i,settingsDir())||shell_materials::configured(i,settingsDir());
     updateNativeInfo();
-    if(!code){message(shellRequestedOn?tr(L"玻璃背景已设置，请打开对应区域查看。",L"Glass background configured. Open the corresponding surface to view it."):tr(L"已恢复原背景样式。",L"Original background styles restored."));if(shellRequested<0&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
+    if(!code){message(shellRequestedOn?tr(L"LiquidGlass 完整主题已应用，请打开对应区域查看。",L"LiquidGlass full theme applied. Open the surface to view it."):tr(L"已恢复原主题及模组状态。",L"Original theme and module state restored."));if(shellRequested<0&&exitAfterRestore){DestroyWindow(mainWindow);return;}}
     else message(std::wstring(tr(L"系统玻璃操作未完成，错误码：",L"System glass operation incomplete, code: "))+std::to_wstring(code)+tr(L"。3：模组/权限不可用；7：模组禁用；8：样式冲突；6：备份异常。已保留恢复文件。",L". 3: module/access unavailable; 7: disabled; 8: style conflict; 6: journal error. Recovery files are retained."));
     exitAfterRestore=false;restoreSequence=false;
 }
@@ -279,6 +281,7 @@ int selfTest(){
     passed=passed&&!GetDlgItem(mainWindow,VolumeOff)&&!GetDlgItem(mainWindow,BrightnessOff);
     for(int id:{VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle}){HWND h=GetDlgItem(mainWindow,id);RECT r{};GetWindowRect(h,&r);passed=passed&&h&&((GetWindowLongPtrW(h,GWL_STYLE)&BS_TYPEMASK)==BS_AUTOCHECKBOX)&&r.right-r.left<=MulDiv(110,dpi,96)&&r.bottom-r.top<=MulDiv(40,dpi,96);}
     passed=shell_materials::regressionTest(settingsDir())&&passed;
+    passed=full_themes::regressionTest(settingsDir())&&passed;
     selectPage(2);passed=passed&&((GetWindowLongPtrW(GetDlgItem(mainWindow,SettingsNote),GWL_STYLE)&WS_VISIBLE)!=0);
     passed=passed&&TabCtrl_GetItemCount(settingsTabs)==4;selectSettingsPage(1);passed=passed&&((GetWindowLongPtrW(language,GWL_STYLE)&WS_VISIBLE)==0);
     selectSettingsPage(2);RECT pending{};passed=passed&&settingsPage==2&&TabCtrl_GetCurSel(settingsTabs)==2&&GetUpdateRect(settingsTabs,&pending,FALSE);
@@ -327,7 +330,7 @@ int selfTest(){
     }
     if(fixture)DestroyWindow(fixture);
     std::wstring report=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"self-test.txt";
-    const char* result=passed?(supported?"PASS: compact bilingual switches; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility; zero duplicate DWM writes; restore.\r\n":"PASS: compact bilingual switches; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility. SKIP: DWM backdrop unavailable.\r\n"):"FAIL: UI, caching, backup compatibility, or restoration check.\r\n";
+    const char* result=passed?(supported?"PASS: compact bilingual switches; full-theme activation/restore/conflicts; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility; zero duplicate DWM writes; restore.\r\n":"PASS: compact bilingual switches; full-theme activation/restore/conflicts; isolated shell apply/restore/conflicts; native motion rule; v1/v2 backup compatibility. SKIP: DWM backdrop unavailable.\r\n"):"FAIL: UI, caching, backup compatibility, or restoration check.\r\n";
     HANDLE file=CreateFileW(report.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);DWORD written=0;
     if(file!=INVALID_HANDLE_VALUE){WriteFile(file,result,(DWORD)lstrlenA(result),&written,nullptr);CloseHandle(file);}else passed=false;
     return passed?0:2;
@@ -374,10 +377,10 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
 }
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
-    for(int kind=0;kind<3;++kind)for(int on=0;on<2;++on){std::wstring expected=L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");if(expected==commandLine){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return shell_materials::operation(kind,on!=0,dir);}}
-    if(wcscmp(commandLine,L"--surface-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);for(int kind=0;kind<3;++kind){int code=shell_materials::run(kind,false,dir);if(code)return code;}return shell_materials::cleanupTaskbar(dir);}
-    for(int mask=0;mask<4;++mask)for(int still=0;still<2;++still){std::wstring expected=L"--native-switch-"+std::to_wstring(mask)+(still?L"-static":L"");if(expected==commandLine){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return shell_materials::nativeOperation(mask,!still,dir);}}
-    if(wcscmp(commandLine,L"--native-apply")==0||wcscmp(commandLine,L"--native-static")==0||wcscmp(commandLine,L"--native-restore")==0){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return shell_materials::nativeOperation(wcscmp(commandLine,L"--native-restore")==0?0:3,wcscmp(commandLine,L"--native-static")!=0,dir);}
+    for(int kind=0;kind<3;++kind)for(int on=0;on<2;++on){std::wstring expected=L"--surface-"+std::to_wstring(kind)+(on?L"-on":L"-off");if(expected==commandLine){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return full_themes::operation(kind,on!=0,dir);}}
+    if(wcscmp(commandLine,L"--surface-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);for(int kind=0;kind<3;++kind){int code=full_themes::operation(kind,false,dir);if(code)return code;}return shell_materials::cleanupTaskbar(dir);}
+    for(int mask=0;mask<4;++mask)for(int still=0;still<2;++still){std::wstring expected=L"--native-switch-"+std::to_wstring(mask)+(still?L"-static":L"");if(expected==commandLine){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return full_themes::nativeOperation(mask,!still,dir);}}
+    if(wcscmp(commandLine,L"--native-apply")==0||wcscmp(commandLine,L"--native-static")==0||wcscmp(commandLine,L"--native-restore")==0){wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);std::wstring dir=path;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return full_themes::nativeOperation(wcscmp(commandLine,L"--native-restore")==0?0:3,wcscmp(commandLine,L"--native-static")!=0,dir,wcscmp(commandLine,L"--native-restore")==0);}
     if(wcsncmp(commandLine,L"--explorer-",11)==0){const wchar_t*effect=nullptr;bool restore=false;
         if(wcscmp(commandLine,L"--explorer-acrylic")==0)effect=L"acrylic";else if(wcscmp(commandLine,L"--explorer-mica")==0)effect=L"mica";else if(wcscmp(commandLine,L"--explorer-mica-alt")==0)effect=L"micaAlt";else if(wcscmp(commandLine,L"--explorer-none")==0)effect=L"none";else if(wcscmp(commandLine,L"--explorer-restore")==0){restore=true;effect=L"";}else return 10;
         wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);std::wstring dir=exe;dir=dir.substr(0,dir.find_last_of(L"\\")+1);return explorer_background::run(effect,restore,dir);}
@@ -391,9 +394,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
     INITCOMMONCONTROLSEX common{};common.dwSize=sizeof(common);common.dwICC=ICC_TAB_CLASSES;InitCommonControlsEx(&common);
     wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);iniPath=path;iniPath=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"settings.ini";
     english=readEnglish(iniPath);
-    for(int i=0;i<3;++i)shellOn[i]=shell_materials::configured(i,settingsDir());
+    for(int i=0;i<3;++i)shellOn[i]=full_themes::configured(i,settingsDir())||shell_materials::configured(i,settingsDir());
     motionEnabled=GetPrivateProfileIntW(L"Native",L"Motion",1,iniPath.c_str())!=0;
-    volumeOn=GetPrivateProfileIntW(L"Native",L"VolumeOn",nativeBackupExists()?1:0,iniPath.c_str())!=0;brightnessOn=GetPrivateProfileIntW(L"Native",L"BrightnessOn",nativeBackupExists()?1:0,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
+    int priorMask=full_themes::nativeMask(settingsDir());volumeOn=GetPrivateProfileIntW(L"Native",L"VolumeOn",priorMask&1,iniPath.c_str())!=0;brightnessOn=GetPrivateProfileIntW(L"Native",L"BrightnessOn",priorMask&2,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
     applyColorTheme(GetPrivateProfileIntW(L"UI",L"ColorTheme",0,iniPath.c_str()),false);WNDCLASSEXW c{};c.cbSize=sizeof(c);c.lpfnWndProc=proc;c.hInstance=instance;c.lpszClassName=ClassName;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.hIcon=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);c.hIconSm=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);c.hbrBackground=background;
     if(!RegisterClassExW(&c)){DeleteObject(background);CloseHandle(mutex);return 1;}
     RECT size={0,0,MulDiv(790,dpi,96),MulDiv(630,dpi,96)};AdjustWindowRectEx(&size,WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,FALSE,0);

@@ -18,7 +18,7 @@ inline std::vector<Value> load(const std::wstring&file,DWORD&first,DWORD&second)
     HANDLE h=CreateFileW(file.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(h==INVALID_HANDLE_VALUE)throw std::runtime_error("backup");std::vector<Value> values;
     try{DWORD magic=0;io(h,&magic,4,false);io(h,&first,4,false);io(h,&second,4,false);if(magic!=0x4e535731||first>4095||second>4095||first==second)throw std::runtime_error("index");values=fields(first,second,0);for(auto&v:values){DWORD n=0;io(h,&v.type,4,false);io(h,&n,4,false);if(n>65536)throw std::runtime_error("size");v.data.resize(n);if(n)io(h,v.data.data(),n,false);}CloseHandle(h);}catch(...){CloseHandle(h);throw;}return values;
 }
-inline int run(int mask,bool motion,const std::wstring&dir){
+inline int run(int mask,bool motion,const std::wstring&dir,bool keepOff=false){
     if(mask<0||mask>3)return 10;
     try{
         Key root,settings;if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,native_osd::Root,0,KEY_QUERY_VALUE|KEY_SET_VALUE|KEY_WOW64_64KEY,&root.h)!=ERROR_SUCCESS)return 3;
@@ -26,7 +26,7 @@ inline int run(int mask,bool motion,const std::wstring&dir){
         std::wstring backup=dir+L"native-osd-switches.bin",plateBackup=dir+L"native-osd-originals.bin";DWORD first=0,second=0;std::vector<Value> originals;
         bool haveChildren=GetFileAttributesW(backup.c_str())!=INVALID_FILE_ATTRIBUTES;
         if(haveChildren)originals=load(backup,first,second);
-        if(mask==0){
+        if(mask==0&&!keepOff){
             if(haveChildren){bool deferred=false;auto values=style_slots::restoration(settings.h,originals,deferred);for(auto&v:values)write(settings.h,v);for(auto&v:values){auto actual=read(settings.h,v.name);if(actual.type!=v.type||actual.data!=v.data)return 5;}explorer_background::notify(root.h);if(!deferred&&!DeleteFileW(backup.c_str()))return 4;}
             return GetFileAttributesW(plateBackup.c_str())!=INVALID_FILE_ATTRIBUTES?native_osd::run(true,dir):0;
         }

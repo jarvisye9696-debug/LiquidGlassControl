@@ -55,8 +55,8 @@ Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk comp
 ## Validation
 
 - Keep every user-facing caption paired in Chinese and English; first launch defaults to English, saved choices persist.
-- Do not change taskbar layout, switch its theme, intercept media keys, or add a duplicate volume/brightness overlay.
-- Shell styling must remain scoped to the selected backgrounds and support restoration. Never write layout properties. Keep users' recovery journals.
+- Full-theme switches deliberately select Windhawk LiquidGlass themes including layout/sizing. Do not intercept media keys or add duplicate volume/brightness overlays.
+- Preserve custom styles and recovery journals; restore original theme and module activation state when Off.
 - The self-test uses local fixtures and temporary files; it does not apply live system styles. DWM assertions are skipped where unsupported.
 - Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and relevant Windhawk mod versions.
 - Do not describe entry transitions as smooth numeric progress animation. The latter is not implemented yet.

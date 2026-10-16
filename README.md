@@ -6,26 +6,26 @@ Glass-style controls for **Windows 11 x64** · **Windows 11 x64** 玻璃效果�
 
 ## English
 
-Development v0.9.3: compact switches for volume, brightness, taskbar, Start menu and notifications/calendar. The new surfaces require their matching Windhawk Styler mods.
+Development v0.9.3: compact switches for volume, brightness, taskbar, Start menu and notifications/calendar. The three surfaces apply full Windhawk LiquidGlass themes, including layout/sizing. Off restores the previous theme/module state; install the matching Styler mods first.
 
 - Seven interface colors under **Settings → General**; changes apply immediately and are saved.
 - Apply and restore app window materials; switch native volume and brightness glass independently.
 - Extract the ZIP, then open `LiquidGlassControl.exe`. Closing the window keeps it in the tray.
 - English by default. Change language in **Settings → General**; your choice is saved.
 - Native indicators require Windhawk **Windows 11 Taskbar Styler**; Explorer content glass requires **Windows 11 File Explorer Styler**. [Get Windhawk](https://windhawk.net/).
-- Some apps keep opaque content. Liquid progress animations are not implemented yet. Taskbar position and size stay unchanged.
+- Some apps keep opaque content. Liquid progress animations are not implemented yet. Full themes change layout and sizing.
 - Before removing the app, use **Settings → About → Restore and exit**. Keep recovery backups until restoration succeeds.
 
 ## 中文
 
-开发版 v0.9.3：音量、亮度改为小开关，新增任务栏、开始菜单、通知中心与日历开关；新增区域需要对应的 Windhawk Styler 模组。
+开发版 v0.9.3：音量、亮度改为小开关，新增任务栏、开始菜单、通知中心与日历开关；新增区域应用 Windhawk LiquidGlass 完整主题（包含布局和尺寸），关闭后恢复原主题与模组状态；请先安装对应 Styler 模组。
 
 - 在 **设置 → 常规 → 界面配色** 选择七种颜色，立即生效并自动保存。
 - 应用、还原窗口玻璃材质，独立开关原生音量和亮度提示条的玻璃效果。
 - 解压 ZIP 后打开 `LiquidGlassControl.exe`，关闭窗口后继续在托盘运行。
 - 首次默认英文，在 **设置 → 常规** 切换语言，选择会自动保存。
 - 原生提示条需要 Windhawk 的 **Windows 11 Taskbar Styler**；资源管理器内容区需要 **Windows 11 File Explorer Styler**。[下载 Windhawk](https://windhawk.net/)。
-- 部分应用内容区无法透明，进度条液态动画尚未实现。不改变任务栏位置和大小。
+- 部分应用内容区无法透明，进度条液态动画尚未实现。完整主题包含布局与尺寸调整。
 - 删除程序前使用 **设置 → 关于 → 还原并退出**，恢复成功前保留备份文件。
 
 ## Contributors / 贡献者

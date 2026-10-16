@@ -14,10 +14,10 @@ Liquid Glass Control 0.9.3 — Windows 11 x64
 程序可以单独打开。以下功能需要额外安装并启用 Windhawk 模组：
 • 原生音量 / 亮度提示条玻璃：Windows 11 Taskbar Styler。
 • 系统玻璃页：音量、亮度、任务栏、开始菜单、通知中心均使用独立小开关。
-• 任务栏背景：Windows 11 Taskbar Styler；只改背景，不改位置或大小。
+• 任务栏完整主题：Windows 11 Taskbar Styler；包含布局和尺寸。
 • 开始菜单：Windows 11 Start Menu Styler。
 • 通知中心与日历：Windows 11 Notification Center Styler。
-• 新增区域开关关闭时恢复原样式；模组未安装或禁用时无法开启。
+• 开启主题时启用已安装模组，关闭后恢复原主题及启用状态。
 • 资源管理器内容区玻璃：Windows 11 File Explorer Styler。
 Windhawk 官方：https://windhawk.net/
 提示条模组：https://windhawk.net/mods/windows-11-taskbar-styler
@@ -25,7 +25,7 @@ Windhawk 官方：https://windhawk.net/
 在 Windhawk 中安装并启用对应模组即可，无需切换任务栏主题。
 本压缩包不包含 Windhawk，也不会自动安装它。原生样式修改时会请求管理员授权。
 其他应用使用系统窗口材质接口，部分应用自己绘制的不透明内容区无法变玻璃。
-不修改任务栏的位置和大小。进度条液态流光 / 数值平滑动画尚未实现。
+完整主题包含布局和尺寸；截图中的配套模组需单独配置。进度条液态流光 / 数值平滑动画尚未实现。
 
 【还原、更新和卸载】
 语言和偏好保存在程序旁的 settings.ini。
@@ -43,7 +43,7 @@ English
 
 System glass has compact independent switches for volume, brightness, taskbar, Start menu and notifications/calendar.
 Taskbar glass uses Windows 11 Taskbar Styler; Start menu and notifications use their respective Styler mods.
-New surface switches restore original styles when Off. Missing/disabled modules cannot be enabled from this app.
+Full-theme switches enable installed mods; Off restores the prior theme/module state.
 
 1. Extract the entire ZIP to a writable folder. Do not run inside the ZIP.
 2. Open LiquidGlassControl.exe. No build tools or extra C++ runtime are needed.
@@ -57,7 +57,7 @@ Optional dependencies (install and enable the relevant Windhawk mods):
 • Explorer content glass: Windows 11 File Explorer Styler.
 Official download and mod pages are listed above. Windhawk is not bundled or installed automatically.
 Native styling requests administrator approval. No taskbar theme switch is required.
-Other applications may keep their own opaque content. Taskbar position and size are not changed.
+Other applications may keep their own opaque content. Full themes include layout/sizing; companion mods require separate setup.
 Liquid progress highlights and smooth numeric progress animation are not implemented yet.
 
 Settings and restoration backups stay beside the EXE. Keep the backups until Restore and exit succeeds.
