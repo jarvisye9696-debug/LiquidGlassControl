@@ -1,9 +1,9 @@
-param([switch]$SkipBuild, [string]$ExecutablePath)
+param([switch]$SkipBuild, [string]$ExecutablePath, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version = '0.9'
 $name = "LiquidGlassControl-$version-win11-x64"
-$dist = Join-Path $PSScriptRoot 'dist'
+$dist = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'dist' }
 $stage = Join-Path $PSScriptRoot ('build\package-' + [guid]::NewGuid().ToString('N'))
 if ($ExecutablePath) {
     $source = (Resolve-Path -LiteralPath $ExecutablePath).Path

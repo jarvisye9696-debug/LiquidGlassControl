@@ -4,7 +4,9 @@
 #define UNICODE
 #endif
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
+#include <objbase.h>
 #include <shellapi.h>
 #include <dwmapi.h>
 #include <string>
@@ -121,7 +123,7 @@ HICON applicationIcon(const Entry&e){
     auto found=appIcons.find(key);if(found!=appIcons.end())return found->second;
     DWORD_PTR supplied=0;HICON icon=nullptr;SendMessageTimeoutW(e.hwnd,WM_GETICON,ICON_SMALL2,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,20,&supplied);if(supplied)icon=CopyIcon((HICON)supplied);
     if(!icon){HICON cls=(HICON)GetClassLongPtrW(e.hwnd,GCLP_HICONSM);if(cls)icon=CopyIcon(cls);}
-    if(!icon&&file[0]){HICON small=nullptr;ExtractIconExW(file,0,nullptr,&small,1);icon=small;}
+    if(!icon&&file[0]){HICON extractedIcon=nullptr;ExtractIconExW(file,0,nullptr,&extractedIcon,1);icon=extractedIcon;}
     if(!icon)icon=CopyIcon(LoadIconW(nullptr,IDI_APPLICATION));appIcons[key]=icon;return icon;
 }
 void refresh(){
