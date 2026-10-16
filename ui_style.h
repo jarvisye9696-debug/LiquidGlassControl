@@ -48,6 +48,20 @@ LRESULT CALLBACK buttonHover(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR)
 void roundFill(HDC dc,RECT r,COLORREF fill,COLORREF edge,int radius){
     HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,edge);auto oldBrush=SelectObject(dc,b),oldPen=SelectObject(dc,p);RoundRect(dc,r.left,r.top,r.right,r.bottom,radius,radius);SelectObject(dc,oldBrush);SelectObject(dc,oldPen);DeleteObject(b);DeleteObject(p);
 }
+LRESULT CALLBACK compactSwitch(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    if(m==WM_ERASEBKGND)return 1;
+    if(m==WM_PAINT){
+        PAINTSTRUCT ps;HDC dc=BeginPaint(h,&ps);RECT r{};GetClientRect(h,&r);FillRect(dc,&r,cardBrush);
+        auto px=[](int n){return MulDiv(n,dpi,96);};bool on=SendMessageW(h,BM_GETCHECK,0,0)==BST_CHECKED,active=IsWindowEnabled(h);
+        RECT track={px(2),px(4),px(54),px(32)};COLORREF fill=!active?RGB(200,206,215):on?palette().accent:RGB(155,165,181);
+        roundFill(dc,track,fill,fill,px(28));HBRUSH thumb=CreateSolidBrush(RGB(255,255,255));auto oldBrush=SelectObject(dc,thumb);auto oldPen=SelectObject(dc,GetStockObject(NULL_PEN));int x=on?px(29):px(5);Ellipse(dc,x,px(7),x+px(22),px(29));SelectObject(dc,oldPen);SelectObject(dc,oldBrush);DeleteObject(thumb);
+        RECT caption=r;caption.left=px(62);SelectObject(dc,font);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,active?textColor():RGB(134,143,157));DrawTextW(dc,on?tr(L"开",L"On"):tr(L"关",L"Off"),-1,&caption,DT_SINGLELINE|DT_VCENTER|DT_NOPREFIX);
+        if(GetFocus()==h){InflateRect(&r,-1,-1);DrawFocusRect(dc,&r);}EndPaint(h,&ps);return 0;
+    }
+    auto result=DefSubclassProc(h,m,w,l);
+    if(m==BM_SETCHECK||m==WM_ENABLE||m==WM_SETFOCUS||m==WM_KILLFOCUS||m==WM_KEYUP||m==WM_LBUTTONUP)InvalidateRect(h,nullptr,FALSE);
+    return result;
+}
 LRESULT CALLBACK themedControl(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR comboControl){
     if(m==WM_ERASEBKGND){RECT r;GetClientRect(h,&r);FillRect(reinterpret_cast<HDC>(w),&r,background);return 1;}
     if(m==WM_PAINT&&comboControl){

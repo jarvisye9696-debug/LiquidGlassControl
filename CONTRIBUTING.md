@@ -48,6 +48,7 @@ Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk comp
 | `control_ui.h` | Controls and Chinese/English captions |
 | `ui_style.h` | Fonts and GDI rendering |
 | `native_osd.h`, `native_switches.h` | Native volume/brightness styles and restoration journals |
+| `shell_materials.h`, `shell_materials_test.h` | Independent shell background rules, journals and isolated registry tests |
 | `explorer_background.h` | Explorer-specific styles and restoration |
 | `package.ps1`, `release/` | Clean portable distribution and user instructions |
 
@@ -55,7 +56,7 @@ Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk comp
 
 - Keep every user-facing caption paired in Chinese and English; first launch defaults to English, saved choices persist.
 - Do not change taskbar layout, switch its theme, intercept media keys, or add a duplicate volume/brightness overlay.
-- Native styling must remain scoped to the native indicators and support restoration. Keep users' recovery journals.
+- Shell styling must remain scoped to the selected backgrounds and support restoration. Never write layout properties. Keep users' recovery journals.
 - The self-test uses local fixtures and temporary files; it does not apply live system styles. DWM assertions are skipped where unsupported.
 - Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and relevant Windhawk mod versions.
 - Do not describe entry transitions as smooth numeric progress animation. The latter is not implemented yet.

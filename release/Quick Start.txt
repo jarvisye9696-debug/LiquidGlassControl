@@ -1,4 +1,4 @@
-Liquid Glass Control 0.9.2 — Windows 11 x64
+Liquid Glass Control 0.9.3 — Windows 11 x64
 免安装版 / Portable edition
 
 【开始使用】
@@ -13,6 +13,11 @@ Liquid Glass Control 0.9.2 — Windows 11 x64
 【效果需要的组件】
 程序可以单独打开。以下功能需要额外安装并启用 Windhawk 模组：
 • 原生音量 / 亮度提示条玻璃：Windows 11 Taskbar Styler。
+• 系统玻璃页：音量、亮度、任务栏、开始菜单、通知中心均使用独立小开关。
+• 任务栏背景：Windows 11 Taskbar Styler；只改背景，不改位置或大小。
+• 开始菜单：Windows 11 Start Menu Styler。
+• 通知中心与日历：Windows 11 Notification Center Styler。
+• 新增区域开关关闭时恢复原样式；模组未安装或禁用时无法开启。
 • 资源管理器内容区玻璃：Windows 11 File Explorer Styler。
 Windhawk 官方：https://windhawk.net/
 提示条模组：https://windhawk.net/mods/windows-11-taskbar-styler
@@ -35,6 +40,10 @@ Windows 11、Intel / AMD 64 位；未打包 ARM64 版本。
 
 ────────────────────────────────────────
 English
+
+System glass has compact independent switches for volume, brightness, taskbar, Start menu and notifications/calendar.
+Taskbar glass uses Windows 11 Taskbar Styler; Start menu and notifications use their respective Styler mods.
+New surface switches restore original styles when Off. Missing/disabled modules cannot be enabled from this app.
 
 1. Extract the entire ZIP to a writable folder. Do not run inside the ZIP.
 2. Open LiquidGlassControl.exe. No build tools or extra C++ runtime are needed.

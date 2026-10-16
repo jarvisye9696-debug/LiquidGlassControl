@@ -10,23 +10,25 @@ void fitTabItems(HWND tab){
     InvalidateRect(tab,nullptr,TRUE);
 }
 void localize(){
-    SetWindowTextW(mainWindow,tr(L"Liquid Glass · v0.9.2",L"Liquid Glass · v0.9.2"));
+    SetWindowTextW(mainWindow,tr(L"Liquid Glass · v0.9.3",L"Liquid Glass · v0.9.3"));
     struct Text{int id;const wchar_t*zh;const wchar_t*en;};
     const Text texts[]={
       {Header,L"Liquid Glass",L"Liquid Glass"},{Refresh,L"刷新窗口",L"Refresh windows"},{Apply,L"应用",L"Apply"},{Restore,L"还原",L"Restore"},{Pause,L"隐藏至托盘",L"Hide to tray"},
       {Note,L"选择应用后点击「应用」，点击「还原」撤销效果。\r\n资源管理器有整窗后端，其他应用的内容区仍取决于兼容性。",L"Choose an app and Apply; Restore reverts the effect.\r\nExplorer has a whole-window backend. Other app content depends on compatibility."},
       {VolumeHeading,L"音量提示",L"Volume indicator"},{BrightnessHeading,L"亮度提示",L"Brightness indicator"},
-      {VolumeOn,L"On · 开启",L"On"},{VolumeOff,L"Off · 关闭",L"Off"},{BrightnessOn,L"On · 开启",L"On"},{BrightnessOff,L"Off · 关闭",L"Off"},
+      {VolumeOn,L"音量玻璃",L"Volume glass"},{BrightnessOn,L"亮度玻璃",L"Brightness glass"},
+      {TaskbarToggle,L"任务栏玻璃",L"Taskbar glass"},{StartToggle,L"开始菜单玻璃",L"Start menu glass"},{NotificationToggle,L"通知中心玻璃",L"Notification center glass"},
+      {TaskbarHeading,L"任务栏",L"Taskbar"},{StartHeading,L"开始菜单",L"Start menu"},{NotificationHeading,L"通知中心与日历",L"Notification center and calendar"},
       {MotionEnabled,L"原生提示条轻量动画（实验性）",L"Gentle native indicator motion (experimental)"},
       {LanguageLabel,L"界面语言",L"Interface language"},{ColorThemeLabel,L"界面配色",L"Interface color"},{StartupAnimation,L"程序启动时淡入并轻轻上移",L"Fade and gently slide the app in at startup"},
       {SettingsNote,L"语言、配色和启动动画偏好自动保存。\r\n关闭设置窗口会继续在托盘运行。",L"Language, color and startup animation preferences are saved automatically.\r\nClosing settings keeps the app running in the tray."},
       {MotionText,L"程序启动\r\n180 毫秒淡入与轻移，只播放一次，结束后停止定时器。\r\n\r\n原生音量与亮度提示\r\n使用 XAML 入场与重定位过渡，触发取决于 Windows 控件生命周期。\r\n连续按键时的数值动画仍由系统控制。两种动画都遵循系统减少动画设置。",L"App startup\r\nA 180 ms fade/slide runs once, then its timer stops.\r\n\r\nNative volume and brightness\r\nXAML entrance/reposition transitions depend on the shell control lifecycle.\r\nWindows still controls numeric animation during repeated key presses.\r\nBoth animations respect the system's reduced-motion preference."},
-      {CompatText,L"资源管理器：需要已安装并启用 File Explorer Styler。\r\n其他应用：外框材质可以尝试，不保证不透明内容区变玻璃。\r\n\r\n原生音量与亮度：使用 Taskbar Styler 的提示条控件，不切换任务栏主题。\r\nOn 为玻璃，单项 Off 为普通不透明背景；两项都 Off 时恢复原配置。\r\n改变原生提示条样式需要管理员授权。",L"Explorer requires installed, enabled File Explorer Styler.\r\nOther apps can try frame materials; opaque content may remain unchanged.\r\n\r\nNative indicators use Taskbar Styler without switching the taskbar theme.\r\nOn uses glass; individual Off uses an opaque background. Both Off restores originals.\r\nChanging native indicator styles requires administrator approval."},
-      {AboutText,L"Liquid Glass 0.9.2\r\n原生 Windows 应用，桌面 EXE、窗口和托盘使用统一图标。\r\n\r\n窗口事件合并处理，已应用材质有缓存。界面不持续重绘。\r\n不接管媒体键、不改变实际音量与亮度，不修改任务栏位置和大小。\r\n效果尚不包含完整光学折射。",L"Liquid Glass 0.9.2\r\nNative Windows app with one icon for the EXE, window and tray.\r\n\r\nWindow events are coalesced; applied materials and app icons are cached.\r\nNo continuous idle repainting, media-key interception or actual level changes.\r\nTaskbar position/size stay intact. Full optical refraction is not implemented."},
+      {CompatText,L"资源管理器：需要 File Explorer Styler。\r\n音量、亮度与任务栏：需要 Taskbar Styler。\r\n开始菜单：需要 Start Menu Styler。\r\n通知中心与日历：需要 Notification Center Styler。\r\n\r\n请安装并启用对应模组。只调整背景，不切换主题或修改布局。\r\n新增开关关闭时恢复原样式。音量/亮度两项都关闭时恢复原配置。\r\n修改系统样式需要管理员授权。部分应用内容区仍可能不透明。",L"Explorer: File Explorer Styler.\r\nVolume, brightness and taskbar: Taskbar Styler.\r\nStart menu: Start Menu Styler.\r\nNotifications/calendar: Notification Center Styler.\r\n\r\nInstall and enable the relevant mods. Backgrounds only; no theme/layout changes.\r\nNew surface switches restore originals when Off. Both indicators Off restores originals.\r\nSystem styling requires administrator approval. Some app content stays opaque."},
+      {AboutText,L"Liquid Glass 0.9.3\r\n原生 Windows 应用，桌面 EXE、窗口和托盘使用统一图标。\r\n\r\n窗口事件合并处理，已应用材质有缓存。界面不持续重绘。\r\n不接管媒体键、不改变实际音量与亮度，不修改任务栏位置和大小。\r\n效果尚不包含完整光学折射。",L"Liquid Glass 0.9.3\r\nNative Windows app with one icon for the EXE, window and tray.\r\n\r\nWindow events are coalesced; applied materials and app icons are cached.\r\nNo continuous idle repainting, media-key interception or actual level changes.\r\nTaskbar position/size stay intact. Full optical refraction is not implemented."},
       {ExitApp,L"还原并退出",L"Restore and exit"}
     };
     for(auto&t:texts)SetWindowTextW(GetDlgItem(mainWindow,t.id),tr(t.zh,t.en));
-    const wchar_t*names[]={tr(L"应用玻璃",L"App glass"),tr(L"音量与亮度",L"Volume and brightness"),tr(L"设置",L"Settings")};
+    const wchar_t*names[]={tr(L"应用玻璃",L"App glass"),tr(L"系统玻璃",L"System glass"),tr(L"设置",L"Settings")};
     for(int i=0;i<3;++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=const_cast<wchar_t*>(names[i]);TabCtrl_SetItem(tabs,i,&item);}
     const wchar_t*subnames[]={tr(L"常规",L"General"),tr(L"动画",L"Motion"),tr(L"兼容性",L"Compatibility"),tr(L"关于",L"About")};
     for(int i=0;i<4;++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=const_cast<wchar_t*>(subnames[i]);TabCtrl_SetItem(settingsTabs,i,&item);}
@@ -36,7 +38,7 @@ void localize(){
     combo(GetDlgItem(mainWindow,ColorTheme),{tr(L"经典蓝",L"Classic blue"),tr(L"流光紫",L"Violet"),tr(L"青绿",L"Jade"),tr(L"暖橙",L"Warm orange"),tr(L"玫瑰",L"Rose"),tr(L"湖蓝",L"Lake blue"),tr(L"石墨灰",L"Graphite")},colorTheme);
     lstrcpynW(tray.szTip,tr(L"Liquid Glass · 原生提示条",L"Liquid Glass · Native indicators"),128);if(tray.hWnd)Shell_NotifyIconW(NIM_MODIFY,&tray);
     createFonts();fitTabItems(tabs);fitTabItems(settingsTabs);refresh();updateNativeInfo();
-    message(explorerJob||nativeJob?tr(L"正在处理，请稍候……",L"Working, please wait..."):tr(L"选择应用或切换分页。语言切换已移至设置 → 常规。",L"Choose an app or a page. Language is under Settings > General."));
+    message(explorerJob||nativeJob||shellJob?tr(L"正在处理，请稍候……",L"Working, please wait..."):tr(L"选择应用或切换分页。语言切换已移至设置 → 常规。",L"Choose an app or a page. Language is under Settings > General."));
 }
 HWND control(const wchar_t*cls,const wchar_t*text,DWORD style,int id,int x,int y,int w,int h){
     if(_wcsicmp(cls,L"BUTTON")==0&&((style&BS_TYPEMASK)==BS_PUSHBUTTON||(style&BS_TYPEMASK)==BS_DEFPUSHBUTTON))style=(style&~BS_TYPEMASK)|BS_OWNERDRAW;
@@ -55,9 +57,10 @@ void buildUI(){
     compatibility=control(L"STATIC",L"",0,Compatibility,24,346,742,42);
     control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Refresh,24,398,212,36);control(L"BUTTON",L"",BS_DEFPUSHBUTTON|WS_TABSTOP,Apply,250,398,250,36);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Restore,514,398,252,36);note=control(L"STATIC",L"",0,Note,24,454,742,82);
     buildingPage=1;
-    control(L"STATIC",L"",0,VolumeHeading,32,146,170,32);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,VolumeOn,214,120,250,88);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,VolumeOff,482,120,270,88);
-    control(L"STATIC",L"",0,BrightnessHeading,32,266,170,32);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,BrightnessOn,214,240,250,88);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,BrightnessOff,482,240,270,88);
-    control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,MotionEnabled,32,364,720,32);SendMessageW(GetDlgItem(mainWindow,MotionEnabled),BM_SETCHECK,motionEnabled?BST_CHECKED:BST_UNCHECKED,0);nativeInfo=control(L"STATIC",L"",0,NativeInfo,32,430,720,90);
+    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle};
+    for(int i=0;i<5;++i){int y=118+i*64;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,switches[i],650,y,100,36);SetWindowSubclass(toggle,compactSwitch,3,0);}
+    control(L"STATIC",L"",0,TaskbarHint,40,274,590,22);control(L"STATIC",L"",0,StartHint,40,338,590,22);control(L"STATIC",L"",0,NotificationHint,40,402,590,22);
+    control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,MotionEnabled,40,446,710,30);SendMessageW(GetDlgItem(mainWindow,MotionEnabled),BM_SETCHECK,motionEnabled?BST_CHECKED:BST_UNCHECKED,0);nativeInfo=control(L"STATIC",L"",0,NativeInfo,40,488,710,48);
     buildingPage=2;
     settingsTabs=control(WC_TABCONTROLW,L"",tabStyle,SettingsPages,32,112,720,38);tabItem(settingsTabs,4,176);
     buildingSettings=0;control(L"STATIC",L"",0,LanguageLabel,40,184,210,28);language=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_TABSTOP,Language,272,178,440,150);combo(language,{L"简体中文",L"English"},english?1:0);
