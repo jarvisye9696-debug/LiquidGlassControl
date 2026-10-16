@@ -1,4 +1,4 @@
-# Standalone materials (0.10.0 experimental)
+# Standalone materials (0.10.1 experimental)
 
 `glass_controller.h` extracts the embedded DLL, publishes bounded preferences in a per-controller shared mapping and attaches temporary thread hooks only to selected shell/Explorer windows. Hooks are removed after bootstrap. New effects do not use Windhawk runtime, SDK, mod DLLs or registry settings.
 
@@ -17,3 +17,5 @@ References (original implementation; GPL mod sources are not bundled):
 - https://learn.microsoft.com/windows/win32/api/xamlom/nf-xamlom-initializexamldiagnosticsex
 - https://learn.microsoft.com/windows/apps/develop/ui/in-app-acrylic
 - https://github.com/ramensoftware/windows-11-taskbar-styling-guide/tree/main/Themes/LiquidGlass2
+
+0.10.1 fixes: query the diagnostics service's version 3 interface; enumerate material property chains rather than assuming GetPropertyIndex accepts unqualified names; use a bounded asynchronous message-thread bootstrap for packaged shell processes; acknowledge actual per-surface writes and show unconfirmed requests explicitly. Embedded DLL filenames include a content identifier for safe hot updates. On runtimes without the optional diagnostics-cache-release interface, observe at most 8192 reports; that compatibility path can retain diagnostics references and needs further memory validation. Unchanged material settings skip repeated writes.

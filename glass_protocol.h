@@ -7,6 +7,7 @@ constexpr wchar_t ThreadClass[]=L"LiquidGlass.Engine.Thread.v1";
 constexpr wchar_t AttachMessage[]=L"LiquidGlass.Engine.Attach.v1";
 constexpr wchar_t RefreshMessage[]=L"LiquidGlass.Engine.Refresh.v1";
 constexpr wchar_t StatusMessage[]=L"LiquidGlass.Engine.Status.v1";
+constexpr wchar_t AttachAckMessage[]=L"LiquidGlass.Engine.AttachAck.v1";
 constexpr CLSID TapId={0x973361c7,0xcbe9,0x4da4,{0x9c,0x96,0x3b,0x70,0x18,0x3b,0xa1,0x61}};
 enum Feature:DWORD {Volume=1,Brightness=2,Taskbar=4,Start=8,Notifications=16,Explorer=32};
 struct Config {
@@ -19,6 +20,7 @@ inline Config normalize(Config c){c.features&=63;c.opacity=bounded(c.opacity,5,9
 // Names only identify material surfaces. No width, height, padding, alignment,
 // taskbar position or system work-area property is ever written by this engine.
 enum Surface {NoSurface,TaskbarFill,OsdPlate,VolumePlate,BrightnessPlate,StartPlate,StartOverlay,NotificationPlate,ExplorerPlate};
+inline DWORD feature(Surface s){switch(s){case TaskbarFill:return Taskbar;case VolumePlate:return Volume;case BrightnessPlate:return Brightness;case StartPlate:return Start;case NotificationPlate:return Notifications;case ExplorerPlate:return Explorer;default:return 0;}}
 inline Surface identify(const std::wstring&name,const std::wstring&type,int host){
     if(host==0){
         if(name==L"BackgroundFill"&&type.find(L"Rectangle")!=std::wstring::npos)return TaskbarFill;

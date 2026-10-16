@@ -6,7 +6,7 @@ Windows 11 x64 glass controls · Windows 11 x64 玻璃效果工具
 
 ## English
 
-**0.10.0 is experimental; live shell validation is pending.**
+**0.10.1 is experimental; live shell validation is pending.**
 
 - Standalone XAML material engine embedded in one EXE; no Windhawk installation required. The engine DLL is extracted beside the EXE at runtime.
 - Independent volume, brightness, taskbar, Start, notification and Explorer XAML switches. Taskbar layout and size are preserved.
@@ -17,7 +17,7 @@ Windows 11 x64 glass controls · Windows 11 x64 玻璃效果工具
 
 ## 中文
 
-**0.10.0 是实验性开发版本，系统界面仍需实机验证。**
+**0.10.1 是实验性开发版本，系统界面仍需实机验证。**
 
 - 独立 XAML 材质引擎，单 EXE 分发，无需安装 Windhawk；运行时在程序旁释放引擎 DLL。
 - 音量、亮度、任务栏、开始菜单、通知中心和资源管理器 XAML 区域独立开关，保留任务栏原布局与尺寸。

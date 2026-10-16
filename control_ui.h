@@ -10,7 +10,7 @@ void fitTabItems(HWND tab){
     InvalidateRect(tab,nullptr,TRUE);
 }
 void localize(){
-    SetWindowTextW(mainWindow,L"Liquid Glass · v0.10.0");
+    SetWindowTextW(mainWindow,L"Liquid Glass · v0.10.1");
     struct Text{int id;const wchar_t*zh;const wchar_t*en;};
     const Text texts[]={
       {Header,L"Liquid Glass",L"Liquid Glass"},{Refresh,L"刷新窗口",L"Refresh windows"},{Apply,L"应用",L"Apply"},{Restore,L"还原",L"Restore"},{Pause,L"隐藏至托盘",L"Hide to tray"},
@@ -27,7 +27,7 @@ void localize(){
       {SettingsNote,L"语言、配色和启动动画偏好自动保存。\r\n关闭设置窗口会继续在托盘运行。",L"Language, color and startup animation preferences are saved automatically.\r\nClosing settings keeps the app running in the tray."},
       {MotionText,L"程序启动\r\n180 毫秒淡入与轻移，播放结束即停止定时器。\r\n遵循系统减少动画设置。\r\n\r\n音量、亮度的数值与动画由 Windows 原生控件处理。\r\n程序不接管媒体键，不创建重复提示条。",L"App startup\r\nA 180 ms fade/slide stops its timer when finished.\r\nRespects Windows reduced-motion settings.\r\n\r\nWindows owns volume/brightness values and animations.\r\nNo media-key interception or duplicate indicators."},
       {CompatText,L"Windows 11 x64 · 独立引擎，无需安装 Windhawk。\r\n通过 XAML 诊断接口调整已有材质面板，不重排系统布局。\r\nWindows 更新或其他主题工具可能影响兼容性。\r\n\r\n资源管理器支持现代 XAML 区域与窗口背景；\r\n经典文件列表等自绘内容区可能仍不透明。\r\n其他应用的玻璃效果取决于其绘制方式。\r\n\r\n升级时仅恢复本程序保存的旧 Windhawk 配置；需要管理员授权。",L"Windows 11 x64. Standalone engine; Windhawk is not required.\r\nUses XAML diagnostics to style existing material panels, preserving layout.\r\nWindows updates and other theme tools can affect compatibility.\r\n\r\nExplorer supports modern XAML regions and window backdrop;\r\nclassic file lists may remain opaque.\r\nOther applications depend on their own rendering.\r\n\r\nUpgrade restores this app's saved Windhawk settings only;\r\nadministrator approval is required for that migration."},
-      {AboutText,L"Liquid Glass 0.10.0\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass 0.10.0\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
+      {AboutText,L"Liquid Glass 0.10.1\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass 0.10.1\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
       {ExitApp,L"还原并退出",L"Restore and exit"}
     };
     for(auto&t:texts)SetWindowTextW(GetDlgItem(mainWindow,t.id),tr(t.zh,t.en));
