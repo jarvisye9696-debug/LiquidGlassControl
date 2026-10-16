@@ -33,6 +33,7 @@ void applyGlass(bool discover){
     auto effective=glassConfig;HIGHCONTRASTW high{};high.cbSize=sizeof(high);if(SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(high),&high,0)&&(high.dwFlags&HCF_HIGHCONTRASTON))effective.features=0;
     if(!effective.tint){DWORD light=1,size=4;RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);effective.tint=light?1:2;}
     BOOL systemMotion=TRUE;SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION,0,&systemMotion,0);if(!systemMotion)effective.features&=~glass::Dock;
+    pausedFeatures=glassConfig.features&~effective.features;if(effective.economy)pausedFeatures|=glassConfig.features&glass::Dock;confirmedMaterials&=~pausedFeatures;
     engine.publish(effective);if(discover)engine.discover();else engine.broadcast();
     observeWindows();
     WritePrivateProfileStringW(L"Glass",L"Features",std::to_wstring(glassConfig.features).c_str(),iniPath.c_str());
@@ -42,6 +43,7 @@ void applyGlass(bool discover){
     WritePrivateProfileStringW(L"Glass",L"Tint",std::to_wstring(glassConfig.tint).c_str(),iniPath.c_str());
     WritePrivateProfileStringW(L"Glass",L"BatteryFriendly",batteryFriendly?L"1":L"0",iniPath.c_str());
     updateNativeInfo();updateEffectLabels();
-    if(glassConfig.features){if(glassConfig.features&~confirmedMaterials)SetTimer(mainWindow,6,3500,nullptr);message(tr(L"正在连接系统材质；各项会显示连接结果。请打开对应区域。",L"Connecting materials; each item shows its result. Open the selected surface."));}
+    if(glassConfig.features&~pausedFeatures){if(glassConfig.features&~pausedFeatures&~confirmedMaterials)SetTimer(mainWindow,6,3500,nullptr);message(tr(L"正在连接系统材质；各项会显示连接结果。请打开对应区域。",L"Connecting materials; each item shows its result. Open the selected surface."));}
+    else if(pausedFeatures)message(tr(L"效果已按省电或系统辅助功能设置暂停。",L"Effects paused by battery saving or system accessibility settings."));
     else message(tr(L"独立材质效果已关闭。",L"Standalone materials turned off."));
 }

@@ -11,6 +11,7 @@ inline Language read(const std::wstring&path){wchar_t code[32]{};GetPrivateProfi
 inline void save(const std::wstring&path){WritePrivateProfileStringW(L"UI",L"Language",codes[current],path.c_str());}
 struct Text{const wchar_t*en;const wchar_t*pl;const wchar_t*vi;};
 inline const Text catalog[]={
+{L" · Paused",L" · Wstrzymano",L" · Tạm dừng"},{L"Effects paused by battery saving or system accessibility settings.",L"Efekty wstrzymane przez oszczędzanie energii lub ustawienia ułatwień dostępu.",L"Hiệu ứng tạm dừng do tiết kiệm pin hoặc cài đặt trợ năng hệ thống."},
 {L"Dock hover animation",L"Animacja Dock",L"Hoạt ảnh Dock"},
 {L"Smart taskbar hide (maximized or overlapping)",L"Inteligentne ukrywanie paska (maksymalizacja lub zasłonięcie)",L"Tự ẩn thanh tác vụ (phóng to hoặc che khuất)"},
 {L"Smart taskbar hide",L"Inteligentne ukrywanie paska",L"Tự ẩn thanh tác vụ"},
