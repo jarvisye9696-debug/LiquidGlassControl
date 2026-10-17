@@ -122,11 +122,17 @@ LRESULT CALLBACK compactSwitch(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PT
 }
 LRESULT CALLBACK themedControl(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR comboControl){
     if(m==WM_TIMER&&w==kMotionTimer){motionTick(h);return 0;}
-    if(m==WM_NCDESTROY)motionRelease(h);
+    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Hover");}
+    if(comboControl){
+        if(m==WM_MOUSEMOVE&&IsWindowEnabled(h)){trackHover(h);setMotion(h,kHover,1.f);}
+        if(m==WM_MOUSELEAVE){RemovePropW(h,L"LG.Hover");setMotion(h,kHover,0.f);}
+    }
     if(m==WM_ERASEBKGND){RECT r;GetClientRect(h,&r);FillRect(reinterpret_cast<HDC>(w),&r,background);return 1;}
     if(m==WM_PAINT&&comboControl){
         PAINTSTRUCT ps;HDC dc=BeginPaint(h,&ps);RECT r;GetClientRect(h,&r);
-        roundFill(dc,r,cardColor(),palette().edge,MulDiv(8,dpi,96));
+        // Same hover treatment as the push buttons: the surface lifts toward the selection colour and the border takes the accent.
+        float hover=IsWindowEnabled(h)?motionOf(h)->v[kHover]:0.f;motionOf(h)->painted=true;
+        roundFill(dc,r,mix(cardColor(),palette().selection,hover),mix(palette().edge,palette().accent,hover),MulDiv(8,dpi,96));
         RECT text=r;text.left+=MulDiv(8,dpi,96);text.right-=MulDiv(25,dpi,96);
         wchar_t label[256]{};GetWindowTextW(h,label,256);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,textColor());auto oldFont=SelectObject(dc,font);
         DrawTextW(dc,label,-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
