@@ -1,36 +1,31 @@
 # Liquid Glass Control
 
-Windows 11 x64 · [Downloads / 下载](https://github.com/jarvisyip9696/LiquidGlassControl/releases) · [Contribute / 参与开发](CONTRIBUTING.md)
+轻量 Windows 11 玻璃效果工具 · Windows 11 x64
 
-License / 许可证: owner's and DK's original contributions use [GPL-3.0-only](LICENSE); see [licensing scope and third-party notices](LICENSING.md). / 所有者与 DK 的原创贡献采用 GPL-3.0-only，其他贡献的授权范围见说明。
+**[下载最新版本](https://github.com/jarvisyip9696/LiquidGlassControl/releases/tag/v0.12.0-beta.1) · [全部版本](https://github.com/jarvisyip9696/LiquidGlassControl/releases)**
 
-[Code signing policy / 代码签名政策](CODE-SIGNING.md) — SignPath application preparation; current builds remain unsigned. / 正在准备 SignPath 申请，当前版本仍未签名。
+- 系统玻璃效果、实验性任务栏胶囊、Dock 悬停与智能隐藏。
+- 可调模糊、着色和圆角，支持五种语言与设置保存。
+- 无需 Windhawk；关闭至托盘，可还原并退出。
 
-## English
+当前版本：**0.12.0-beta.1**。独立 EXE 约 **902 KiB**，便携 ZIP 约 **866 KiB**。
 
-**0.12.0-beta.1 experimental — live shell testing is still required.**
+> 实验版，当前未签名。通知中心效果尚未确认；胶囊托盘、弹出菜单及完整恢复仍需实测。功耗和内存降幅尚未测量。
 
-- Liquid Glass controls for taskbar, Start, notifications, Explorer, volume and brightness; no Windhawk runtime required.
-- Separate Dock hover animation and smart taskbar auto-hide switches, off by default.
-- Settings → Glass: independent blur, tint and corner controls; battery-saving fallback.
-- Compact experimental taskbar capsules; animated controls with hover-only theme outlines. Settings contains General, Glass and About.
-- English, 简体中文, 繁體中文, Polski and Tiếng Việt; preferences are saved.
-- Close to tray; Restore and exit reverts changes. Competing Windhawk Stylers must be disabled for testing. Classic Explorer lists and custom app content may stay opaque.
+<details>
+<summary>English</summary>
 
-## 中文
+Lightweight glass controls for Windows 11 x64, with adjustable blur, tint and corners, five languages, experimental taskbar capsules, Dock hover and smart auto-hide. No Windhawk runtime required. Close to tray; restore and exit to revert effects.
 
-**0.12.0-beta.1 实验版，系统界面仍需实机验证。**
+Experimental, unsigned build. Notification styling is unconfirmed; capsule tray appearance, popups and complete restoration need live testing. Power and memory savings have not been benchmarked.
 
-- 任务栏、开始菜单、通知中心、资源管理器、音量和亮度玻璃开关，无需 Windhawk 运行时。
-- 新增 Dock 悬停动画和任务栏智能隐藏，默认关闭、单独开启。
-- 设置 → 玻璃效果：分别调节模糊、着色和圆角，支持电池省电回退。
-- 紧凑实验性任务栏胶囊；控件支持悬停放大及同配色细边框。设置仅保留常规、玻璃效果和关于。
-- 支持英文、简体中文、繁體中文、波兰语、越南语，自动保存设置。
-- 关闭至托盘，“还原并退出”撤销效果。测试时请停用冲突的 Windhawk Styler；经典文件列表和自绘内容区可能仍不透明。
+</details>
 
-[Build & release / 构建发布](RELEASING.md) · [Architecture / 架构](ARCHITECTURE.md) · Imported engine/material code: GPLv3; see third_party/windhawk / 移植引擎与材质代码：GPLv3，详见 third_party/windhawk
+<details>
+<summary>开发文档 / Development</summary>
 
-Contributors / 贡献者：[DK (@domk6966)](https://github.com/domk6966)
+[参与开发](CONTRIBUTING.md) · [架构](ARCHITECTURE.md) · [构建发布](RELEASING.md) · [版本规则](VERSIONING.md)
 
-0.12.0-beta.1 imports four Styler LiquidGlass material presets and subscription compatibility hooks. Local builds, isolated self-tests and desktop deployment passed. Notification-center styling is still unconfirmed; capsule tray appearance and restoration need further live checks. CPU, power and memory improvements are not benchmarked. Builds remain unsigned.
-0.12.0-beta.1 已移植四组 Styler 的 LiquidGlass 材质规则及订阅兼容逻辑。本机构建、自测与桌面部署已通过；通知中心效果仍未确认，胶囊托盘外观及恢复仍需完整实测。CPU、功耗和内存优化尚未进行前后基准测量。当前构建未签名。
+</details>
+
+[GPL-3.0-only](LICENSE) · [许可范围与第三方声明](LICENSING.md) · [签名政策](CODE-SIGNING.md) · 贡献者：[DK](https://github.com/domk6966)
