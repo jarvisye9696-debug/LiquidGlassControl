@@ -1,8 +1,8 @@
 # Contributing / 参与开发
 
-This repository is public and has no selected open-source license. See the README for the published preview downloads. Maintainers still need to agree on an open-source license.
+The project owner's and DK's original contributions are licensed under GPL-3.0-only. See LICENSE and LICENSING.md for scope and third-party notices. The owner confirmed DK's agreement on 2026-10-16; other copyright holders must authorize any additional contributions.
 
-仓库和预览版下载已公开，暂未选择开源许可证。下载入口见 README，许可证由维护者另行确认。
+项目所有者与 DK 的原创贡献采用 GPL-3.0-only，范围和第三方许可证见 LICENSING.md。所有者已于 2026-10-16 确认 DK 同意；后续其他权利人的贡献仍需取得授权。新增贡献须遵守 LICENSING.md。
 
 ## Work together
 

@@ -27,13 +27,18 @@ Get-Content -LiteralPath (Join-Path $stage 'self-test.txt')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Quick Start.txt') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Create Desktop Shortcut.cmd') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Third Party Notices.txt') -Destination $stage
+foreach ($notice in @('LICENSE', 'LICENSING.md', 'CODE-SIGNING.md')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $notice) -Destination $stage
+}
 # Corresponding source accompanies the GPL engine, with no local settings/logs.
 $sourceFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object { $_.Extension -in '.cpp','.h','.def','.ps1','.md','.txt' } | ForEach-Object FullName)
 $sourceFiles += @((Join-Path $PSScriptRoot 'assets'),(Join-Path $PSScriptRoot 'third_party'),(Join-Path $PSScriptRoot 'release'))
+$sourceFiles += Join-Path $PSScriptRoot 'LICENSE'
 $sourceZip = Join-Path $stage 'LiquidGlass-engine-source.zip'
 Compress-Archive -LiteralPath $sourceFiles -DestinationPath $sourceZip -CompressionLevel Optimal
 # Explicit file list prevents shipping settings, test reports, personal data or recovery journals.
 $files = @($exe, (Join-Path $stage 'Quick Start.txt'), (Join-Path $stage 'Create Desktop Shortcut.cmd'), (Join-Path $stage 'Third Party Notices.txt'), $sourceZip)
+$files += @('LICENSE', 'LICENSING.md', 'CODE-SIGNING.md') | ForEach-Object { Join-Path $stage $_ }
 $zip = Join-Path $dist ($name + '.zip')
 Compress-Archive -LiteralPath $files -DestinationPath $zip -CompressionLevel Optimal -Force
 $standalone = Join-Path $dist ($name + '.exe')

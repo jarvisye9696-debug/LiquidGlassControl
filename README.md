@@ -2,6 +2,10 @@
 
 Windows 11 x64 · [Downloads / 下载](https://github.com/jarvisyip9696/LiquidGlassControl/releases) · [Contribute / 参与开发](CONTRIBUTING.md)
 
+License / 许可证: owner's and DK's original contributions use [GPL-3.0-only](LICENSE); see [licensing scope and third-party notices](LICENSING.md). / 所有者与 DK 的原创贡献采用 GPL-3.0-only，其他贡献的授权范围见说明。
+
+[Code signing policy / 代码签名政策](CODE-SIGNING.md) — SignPath application preparation; current builds remain unsigned. / 正在准备 SignPath 申请，当前版本仍未签名。
+
 ## English
 
 **0.11.1 experimental — live shell testing is still required.**

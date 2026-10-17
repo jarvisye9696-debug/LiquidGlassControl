@@ -1,6 +1,6 @@
 # Releasing / 发布
 
-The repository and v0.9 preview downloads are public. Imported Styler material data and the modified engine carry GPLv3; preserve the supplied licenses and corresponding engine source in portable packages. Controller UI code has no separately selected license. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
+The repository and v0.9 preview downloads are public. The owner's and DK's original code uses GPL-3.0-only; see LICENSING.md for authorization scope and contributor confirmation. Imported Styler material data and the modified engine carry GPLv3; preserve the supplied licenses and corresponding engine source in portable packages. See CODE-SIGNING.md for signing status. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
 2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.
