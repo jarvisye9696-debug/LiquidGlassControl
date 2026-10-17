@@ -41,7 +41,7 @@ constexpr GUID ReleaseId={0x735941a2,0x3ee3,0x495a,{0x8d,0xa9,0x97,0x26,0x27,0x0
 struct CacheRelease:IUnknown{virtual HRESULT STDMETHODCALLTYPE Unregister(InstanceHandle)=0;};
 HMODULE selfModule{};HANDLE mapping{};glass::Config*shared{};HANDLE ownerHandle{},ownerWait{};DWORD ownerPid{};SRWLOCK configLock=SRWLOCK_INIT;
 void trace(const char*stage,HRESULT hr){static volatile LONG errors=0;if(SUCCEEDED(hr)||InterlockedIncrement(&errors)>32)return;wchar_t path[32768]{};GetModuleFileNameW(selfModule,path,32768);std::wstring file=path;file.resize(file.find_last_of(L"\\")+1);file+=L"glass-engine-"+std::to_wstring(GetCurrentProcessId())+L".log";HANDLE h=CreateFileW(file.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(h!=INVALID_HANDLE_VALUE){char text[256]{};int n=snprintf(text,sizeof(text),"%s: 0x%08lx\r\n",stage,(unsigned long)hr);DWORD written=0;WriteFile(h,text,n,&written,nullptr);CloseHandle(h);}}
-UINT refreshMsg{},attachMsg{};std::atomic<bool> injecting[2]{};
+UINT refreshMsg{};std::atomic<bool> injecting[2]{};
 const std::wstring&runtimePath(){static std::wstring path=[](){wchar_t value[32768]{};GetModuleFileNameW(selfModule,value,32768);return std::wstring(value);}();return path;}
 const std::wstring&threadClass(){static auto name=glass::threadClassName(runtimePath());return name;}
 class Session;SRWLOCK sessionsLock=SRWLOCK_INIT;std::vector<Session*> sessions;
@@ -78,7 +78,7 @@ bool connect(DWORD pid){
     HANDLE owner=OpenProcess(SYNCHRONIZE,FALSE,pid);HANDLE wait=nullptr;
     if(!owner||!RegisterWaitForSingleObject(&wait,owner,ownerEnded,nullptr,INFINITE,WT_EXECUTEONLYONCE)){if(owner)CloseHandle(owner);UnmapViewOfFile(view);CloseHandle(m);ReleaseSRWLockExclusive(&configLock);return false;}
     mapping=m;shared=view;ownerHandle=owner;ownerWait=wait;ownerPid=pid;
-    refreshMsg=RegisterWindowMessageW(glass::RefreshMessage);attachMsg=RegisterWindowMessageW(glass::AttachMessage);
+    refreshMsg=RegisterWindowMessageW(glass::RefreshMessage);
     // Diagnostics owns COM objects whose callbacks can outlive the hook.
     // Pin this small DLL until the shell process exits; all element references
     // and overrides are released on Off / controller exit.
