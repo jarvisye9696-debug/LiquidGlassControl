@@ -220,11 +220,13 @@ if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::fea
                 Element root=host;bool taskbar=false;
                 for(int depth=0;root&&depth<16;++depth){if(winrt::get_class_name(root)==L"Taskbar.TaskbarFrame"){taskbar=true;break;}root=Tree::GetParent(root).try_as<Element>();}
                 if(taskbar&&!n.watchers.count(L"CapsuleLayout")){auto&t=thread();auto token=root.LayoutUpdated([&t,h](auto const&,auto const&){if(t.updating)return;auto i=t.nodes.find(h);if(i==t.nodes.end()||i->second.capsuleDirty)return;i->second.capsuleDirty=true;scheduleUpdate(t);});auto weak=winrt::make_weak(root);n.watchers[L"CapsuleLayout"]=[weak,token]{try{if(auto e=weak.get())e.LayoutUpdated(token);}catch(...){}};}
-                double left=width,right=0;std::vector<std::pair<double,double>> auxiliary;
-                std::vector<winrt::Windows::UI::Xaml::DependencyObject> pending;if(taskbar)pending.push_back(root);
+                double left=width,right=0,trayLeft=width,trayRight=0;bool joined=false;std::vector<std::pair<double,double>> auxiliary;
+                Element scanRoot=root;if(taskbar)for(unsigned depth=0;depth<8;++depth){auto parent=Tree::GetParent(scanRoot).try_as<Element>();if(!parent)break;scanRoot=parent;}
+                std::vector<winrt::Windows::UI::Xaml::DependencyObject> pending;if(taskbar)pending.push_back(scanRoot);
                 unsigned visited=0;while(!pending.empty()&&visited++<2048){auto object=pending.back();pending.pop_back();auto child=object.try_as<Element>();
                     if(child&&child.Visibility()!=winrt::Windows::UI::Xaml::Visibility::Visible)continue;
                     auto type=winrt::get_class_name(object);
+                    if(child&&child.Name()==L"SystemTrayFrameGrid"&&child.ActualWidth()>0)try{auto origin=child.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+child.ActualWidth());if(b>a){trayLeft=std::min(trayLeft,a);trayRight=std::max(trayRight,b);joined=true;}continue;}catch(...){}
                     bool icon=type==L"Taskbar.TaskListButton"||type==L"Taskbar.TaskListLabeledButton"||type==L"Taskbar.ExperienceToggleButton"||type==L"SearchUx.SearchUI.SearchIconButton"||type==L"SearchUx.SearchUI.SearchBoxButton";
                     if(icon&&child&&child.ActualWidth()>0){auto origin=child.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+child.ActualWidth());
                         if(b>a){if(type==L"Taskbar.TaskListButton"||type==L"Taskbar.TaskListLabeledButton"){left=std::min(left,a);right=std::max(right,b);}else if(type!=L"Taskbar.ExperienceToggleButton"||b-a<=height*2)auxiliary.emplace_back(a,b);}continue;}
@@ -233,7 +235,7 @@ if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::fea
                 // separate Widgets button at the screen edge must not stretch
                 // the icon capsule across the whole taskbar.
                 if(right>left)for(size_t pass=0;pass<auxiliary.size();++pass){bool changed=false;for(auto span:auxiliary)if(span.first<=right+height&&span.second>=left-height){double a=std::min(left,span.first),b=std::max(right,span.second);changed=changed||a!=left||b!=right;left=a;right=b;}if(!changed)break;}
-                bool joined=false;
+                if(joined){left=std::min(left,trayLeft);right=std::max(right,trayRight);}
                 if(right>left)for(auto const&entry:thread().nodes){if(entry.second.surface!=glass::TaskbarRoot)continue;try{Ptr<IInspectable> value;if(entry.second.weak)entry.second.weak->Resolve(__uuidof(IInspectable),value.put());if(!value)continue;winrt::Windows::Foundation::IInspectable object{nullptr};winrt::copy_from_abi(object,value.p);auto tray=object.try_as<Element>();if(!tray||tray.Name()!=L"SystemTrayFrameGrid"||tray.ActualWidth()<=0)continue;auto origin=tray.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+tray.ActualWidth());if(b>a){left=std::min(left,a);right=std::max(right,b);joined=true;}}catch(...){}}
                 if(right>left){
                     double a=std::max(0.0,left-8),b=std::max(0.0,width-right-8),vertical=std::min(height/4,std::max(2.0,(height-44.0)/2)),radius=std::min(height-2*vertical,width-a-b)/2;

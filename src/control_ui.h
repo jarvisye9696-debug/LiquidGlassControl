@@ -22,11 +22,11 @@ void localize(){
       {ExplorerToggle,L"资源管理器玻璃",L"Explorer glass"},{ExplorerHeading,L"资源管理器",L"File Explorer"},
       {OpacityLabel,L"着色强度（越低越透明）",L"Tint strength (lower is clearer)"},{RadiusLabel,L"面板圆角",L"Panel corner radius"},{TintLabel,L"玻璃色调",L"Glass tint"},
       {BatteryFriendly,L"使用电池或节电模式时降低材质开销",L"Reduce material cost on battery or in battery saver"},
-      {EffectNote,L"更改后自动保存并应用；只调整材质，不改变任务栏尺寸。\r\n独立模糊与着色滑块；Dock 动画和智能隐藏单独开启。",L"Changes are saved and applied; taskbar geometry is preserved.\r\nIndependent blur and tint controls; Dock and smart hide have separate switches."},
+      {EffectNote,L"更改后自动保存并应用；只调整材质，不改变任务栏尺寸。\r\n独立模糊与着色滑块；Dock 悬停动画单独开启。",L"Changes are saved and applied; taskbar geometry is preserved.\r\nIndependent blur and tint controls; Dock hover has a separate switch."},
       {LanguageLabel,L"界面语言",L"Interface language"},{ColorThemeLabel,L"界面配色",L"Interface color"},{StartupAnimation,L"程序启动时淡入并轻轻上移",L"Fade and gently slide the app in at startup"},
       {SettingsNote,L"语言、配色和启动动画偏好自动保存。\r\n关闭设置窗口会继续在托盘运行。",L"Language, color and startup animation preferences are saved automatically.\r\nClosing settings keeps the app running in the tray."},
       {AboutText,L"Liquid Glass " LG_VERSION_W L"\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass " LG_VERSION_W L"\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
-      {DockHeading,L"Dock 悬停动画",L"Dock hover animation"},{DockToggle,L"Dock 悬停动画",L"Dock hover animation"},{AutoHideHeading,L"任务栏智能隐藏（最大化或遮挡时）",L"Smart taskbar hide (maximized or overlapping)"},{AutoHideToggle,L"任务栏智能隐藏",L"Smart taskbar hide"},
+      {DockHeading,L"Dock 悬停动画",L"Dock hover animation"},{DockToggle,L"Dock 悬停动画",L"Dock hover animation"},
 
       {ExitApp,L"还原并退出",L"Restore and exit"}
     };
@@ -45,11 +45,12 @@ void localize(){
     message(migrationJob?tr(L"正在恢复旧主题……",L"Restoring the old theme..."):tr(L"选择应用或切换分页。语言在设置 → 常规；材质在玻璃效果。",L"Choose an app or a page. Language: Settings > General. Materials: Glass."));
 }
 HWND control(const wchar_t*cls,const wchar_t*text,DWORD style,int id,int x,int y,int w,int h){
+    bool isSwitch=_wcsicmp(cls,L"BUTTON")==0&&(style&BS_TYPEMASK)==BS_AUTOCHECKBOX;if(isSwitch)style=(style&~BS_TYPEMASK)|BS_OWNERDRAW;
     if(_wcsicmp(cls,L"BUTTON")==0&&((style&BS_TYPEMASK)==BS_PUSHBUTTON||(style&BS_TYPEMASK)==BS_DEFPUSHBUTTON))style=(style&~BS_TYPEMASK)|BS_OWNERDRAW;
     if(_wcsicmp(cls,L"COMBOBOX")==0)style|=CBS_OWNERDRAWFIXED|CBS_HASSTRINGS;
     auto px=[](int a){return MulDiv(a,dpi,96);};HWND result=CreateWindowExW(0,cls,text,WS_CHILD|WS_VISIBLE|style,px(x),px(y),px(w),px(h),mainWindow,reinterpret_cast<HMENU>((INT_PTR)id),GetModuleHandleW(nullptr),nullptr);
     if(result)controlLayout[result]={x,y,x+w,y+h};if(_wcsicmp(cls,L"LISTBOX")==0)SetWindowSubclass(result,listHover,5,0);
-    SendMessageW(result,WM_SETFONT,reinterpret_cast<WPARAM>(id==Header?headingFont:font),TRUE);SetWindowTheme(result,L"Explorer",nullptr);if(_wcsicmp(cls,L"BUTTON")==0&&(style&BS_TYPEMASK)==BS_AUTOCHECKBOX)SetWindowSubclass(result,compactSwitch,3,0);if(_wcsicmp(cls,TRACKBAR_CLASSW)==0)SetWindowSubclass(result,modernSlider,4,0);if(_wcsicmp(cls,L"COMBOBOX")==0){SetWindowSubclass(result,themedControl,2,1);SendMessageW(result,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),px(23));SendMessageW(result,CB_SETITEMHEIGHT,0,px(26));}if(_wcsicmp(cls,WC_TABCONTROLW)==0)SetWindowSubclass(result,themedControl,2,0);if(_wcsicmp(cls,L"BUTTON")==0&&(style&BS_TYPEMASK)==BS_OWNERDRAW)SetWindowSubclass(result,buttonHover,1,0);if(buildingPage>=0)pageControls[buildingPage].push_back(result);if(buildingSettings>=0)settingsControls[buildingSettings].push_back(result);return result;
+    SendMessageW(result,WM_SETFONT,reinterpret_cast<WPARAM>(id==Header?headingFont:font),TRUE);SetWindowTheme(result,L"Explorer",nullptr);if(isSwitch){SetPropW(result,L"LG.IsSwitch",(HANDLE)1);SetWindowSubclass(result,compactSwitch,3,0);}if(_wcsicmp(cls,TRACKBAR_CLASSW)==0)SetWindowSubclass(result,modernSlider,4,0);if(_wcsicmp(cls,L"COMBOBOX")==0){SetWindowSubclass(result,themedControl,2,1);SendMessageW(result,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),px(23));SendMessageW(result,CB_SETITEMHEIGHT,0,px(26));}if(_wcsicmp(cls,WC_TABCONTROLW)==0)SetWindowSubclass(result,themedControl,2,0);if(!isSwitch&&_wcsicmp(cls,L"BUTTON")==0&&(style&BS_TYPEMASK)==BS_OWNERDRAW)SetWindowSubclass(result,buttonHover,1,0);if(buildingPage>=0)pageControls[buildingPage].push_back(result);if(buildingSettings>=0)settingsControls[buildingSettings].push_back(result);return result;
 }
 void tabItem(HWND tab,int count,int){for(int i=0;i<count;++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=const_cast<wchar_t*>(L" ");TabCtrl_InsertItem(tab,i,&item);}fitTabItems(tab);}
 void resizeControls(){auto px=[](int n){return MulDiv(n,dpi,96);};for(auto&entry:controlLayout){auto h=entry.first;auto&r=entry.second;SetWindowPos(h,nullptr,px(r.left),px(r.top),px(r.right-r.left),px(r.bottom-r.top),SWP_NOZORDER|SWP_NOACTIVATE);wchar_t cls[64]{};GetClassNameW(h,cls,64);if(!_wcsicmp(cls,L"COMBOBOX")){SendMessageW(h,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),px(23));SendMessageW(h,CB_SETITEMHEIGHT,0,px(26));}if(h==list)SendMessageW(h,LB_SETITEMHEIGHT,0,px(48));}fontLanguage=-1;createFonts();RemovePropW(tabs,L"LG.Sel");RemovePropW(settingsTabs,L"LG.Sel");fitTabItems(tabs);fitTabItems(settingsTabs);RedrawWindow(mainWindow,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN);}
@@ -63,9 +64,9 @@ void buildUI(){
     compatibility=control(L"STATIC",L"",0,Compatibility,24,346,742,42);
     control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Refresh,24,398,212,36);control(L"BUTTON",L"",BS_DEFPUSHBUTTON|WS_TABSTOP,Apply,250,398,250,36);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Restore,514,398,252,36);note=control(L"STATIC",L"",0,Note,24,454,742,82);
     buildingPage=1;
-    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading,AutoHideHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle,AutoHideToggle};
-    // Eight system-effect rows; taskbar includes the capsule appearance.
-    for(int i=0;i<8;++i){int y=108+i*38;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,switches[i],650,y,100,36);SetWindowSubclass(toggle,compactSwitch,3,0);}
+    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle};
+    // Seven system-effect rows; taskbar includes the capsule appearance.
+    for(int i=0;i<7;++i){int y=108+i*38;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_OWNERDRAW|WS_TABSTOP,switches[i],650,y,100,36);RemoveWindowSubclass(toggle,buttonHover,1);SetPropW(toggle,L"LG.IsSwitch",(HANDLE)1);SetWindowSubclass(toggle,compactSwitch,3,0);}
     nativeInfo=control(L"STATIC",L"",0,NativeInfo,40,458,710,72);
     buildingPage=2;
     settingsTabs=control(WC_TABCONTROLW,L"",tabStyle,SettingsPages,32,112,720,38);tabItem(settingsTabs,3,224);

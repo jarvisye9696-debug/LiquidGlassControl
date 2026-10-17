@@ -125,7 +125,7 @@ LRESULT CALLBACK buttonHover(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR)
     if(m==WM_SHOWWINDOW&&!w)motionFinish(h);
     if(m==WM_SETFOCUS||m==WM_KILLFOCUS||m==WM_UPDATEUISTATE)InvalidateRect(h,nullptr,FALSE);
     if(m==WM_TIMER&&w==kMotionTimer){motionTick(h);return 0;}
-    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Hover");}
+    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Checked");RemovePropW(h,L"LG.IsSwitch");RemovePropW(h,L"LG.Hover");}
     if(m==WM_MOUSEMOVE&&IsWindowEnabled(h)){trackHover(h);setMotion(h,kHover,1.f);}
     if(m==WM_MOUSELEAVE){RemovePropW(h,L"LG.Hover");setMotion(h,kHover,0.f);setMotion(h,kPress,0.f);}
     if((m==WM_LBUTTONDOWN||(m==WM_KEYDOWN&&w==VK_SPACE))&&IsWindowEnabled(h))setMotion(h,kPress,1.f);
@@ -145,14 +145,7 @@ void roundFill(HDC dc,RECT r,COLORREF fill,COLORREF edge,int radius,int stroke=1
 void drawChevron(HDC dc,RECT r,COLORREF color,bool open){int cx=(r.left+r.right)/2,cy=(r.top+r.bottom)/2,half=std::max(2,MulDiv(4,dpi,96)),rise=std::max(1,MulDiv(2,dpi,96));HPEN pen=CreatePen(PS_SOLID,std::max(1,MulDiv(2,dpi,96)),color);auto old=SelectObject(dc,pen);MoveToEx(dc,cx-half,cy+(open?rise:-rise),nullptr);LineTo(dc,cx,cy+(open?-rise:rise));LineTo(dc,cx+half,cy+(open?rise:-rise));SelectObject(dc,old);DeleteObject(pen);}
 void drawThemeSwatch(HDC dc,RECT&text,int index){if(index<0||index>=7)return;int size=MulDiv(12,dpi,96),cy=(text.top+text.bottom)/2;RECT swatch{text.left,cy-size/2,text.left+size,cy+(size+1)/2};roundFill(dc,swatch,palettes[index].accent,highContrast()?GetSysColor(COLOR_WINDOWTEXT):tint(palettes[index].pressed,70),size);text.left+=MulDiv(24,dpi,96);}
 void hoverTransform(HDC dc,RECT r,float scale){if(highContrast())return;float cx=(r.left+r.right)/2.f,cy=(r.top+r.bottom)/2.f;XFORM transform{scale,0,0,scale,cx*(1-scale),cy*(1-scale)};SetGraphicsMode(dc,GM_ADVANCED);SetWorldTransform(dc,&transform);}
-LRESULT CALLBACK compactSwitch(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
-    if((m==WM_ENABLE&&!w)||(m==WM_SHOWWINDOW&&!w)||m==WM_CANCELMODE)resetInteraction(h);
-    if(m==WM_SHOWWINDOW&&!w)motionFinish(h);
-    if(m==WM_TIMER&&w==kMotionTimer){motionTick(h);return 0;}
-    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Hover");}
-    if(m==WM_ERASEBKGND)return 1;
-    if(m==WM_PAINT){
-        ControlPaint paint(h);HDC dc=paint.dc;RECT r{};GetClientRect(h,&r);FillRect(dc,&r,cardBrush);
+void paintCompactSwitch(HWND h,HDC dc){RECT r{};GetClientRect(h,&r);FillRect(dc,&r,cardBrush);
         auto px=[](int n){return MulDiv(n,dpi,96);};bool active=IsWindowEnabled(h);Motion*mo=motionOf(h);mo->painted=true;
         float check=mo->v[kCheck],press=active?mo->v[kPress]:0.f,hover=active?mo->v[kHover]:0.f;bool on=SendMessageW(h,BM_GETCHECK,0,0)==BST_CHECKED;
         int trackState=SaveDC(dc);hoverTransform(dc,RECT{px(2),px(4),px(54),px(32)},1.f+.06f*hover-.035f*press);
@@ -162,15 +155,24 @@ LRESULT CALLBACK compactSwitch(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PT
         int width=px(22)-(int)(px(3)*press+0.5f),thumbLeft=(int)(px(5)+(px(29)-px(5))*check+0.5f)+(px(22)-width)/2;
         HBRUSH thumb=CreateSolidBrush(RGB(255,255,255));auto oldBrush=SelectObject(dc,thumb);auto oldPen=SelectObject(dc,GetStockObject(NULL_PEN));Ellipse(dc,thumbLeft,px(7),thumbLeft+width,px(29));SelectObject(dc,oldPen);SelectObject(dc,oldBrush);DeleteObject(thumb);
         RestoreDC(dc,trackState);RECT caption=r;caption.left=px(62);wchar_t label[512]{};if(r.right>px(150))GetWindowTextW(h,label,512);SelectObject(dc,font);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,active?textColor():GetSysColor(COLOR_GRAYTEXT));DrawTextW(dc,*label?label:on?tr(L"开",L"On"):tr(L"关",L"Off"),-1,&caption,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
-        if(showFocus(h)){InflateRect(&r,-1,-1);DrawFocusRect(dc,&r);}return 0;
-    }
-    if(m==BM_SETCHECK)setMotion(h,kCheck,w==BST_CHECKED?1.f:0.f);
+        if(showFocus(h)){InflateRect(&r,-1,-1);DrawFocusRect(dc,&r);}
+}
+LRESULT CALLBACK compactSwitch(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    if((m==WM_ENABLE&&!w)||(m==WM_SHOWWINDOW&&!w)||m==WM_CANCELMODE)resetInteraction(h);
+    if(m==WM_SHOWWINDOW&&!w)motionFinish(h);
+    if(m==WM_TIMER&&w==kMotionTimer){motionTick(h);return 0;}
+    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Checked");RemovePropW(h,L"LG.IsSwitch");RemovePropW(h,L"LG.Hover");}
+    if(m==WM_ERASEBKGND)return 1;
+    if(m==WM_PAINT){ControlPaint paint(h);paintCompactSwitch(h,paint.dc);return 0;}
+    if(m==BM_GETCHECK)return GetPropW(h,L"LG.Checked")?BST_CHECKED:BST_UNCHECKED;
+    if(m==BM_SETCHECK){if(w==BST_CHECKED)SetPropW(h,L"LG.Checked",(HANDLE)1);else RemovePropW(h,L"LG.Checked");setMotion(h,kCheck,w==BST_CHECKED?1.f:0.f);InvalidateRect(h,nullptr,FALSE);return 0;}
+
     if(m==WM_MOUSEMOVE&&IsWindowEnabled(h)){trackHover(h);setMotion(h,kHover,1.f);}
     if(m==WM_MOUSELEAVE){RemovePropW(h,L"LG.Hover");setMotion(h,kHover,0.f);setMotion(h,kPress,0.f);}
     if((m==WM_LBUTTONDOWN||(m==WM_KEYDOWN&&w==VK_SPACE))&&IsWindowEnabled(h))setMotion(h,kPress,1.f);
     if(m==WM_LBUTTONUP||m==WM_CAPTURECHANGED||m==WM_KILLFOCUS||(m==WM_KEYUP&&w==VK_SPACE))setMotion(h,kPress,0.f);
     auto result=DefSubclassProc(h,m,w,l);
-    // Auto-checkboxes toggle inside the default procedure on click, space and BM_CLICK, so the target follows the real state afterwards.
+    // Commands update the custom checked state; native checkbox rendering is never used.
     if(m==WM_LBUTTONUP||m==WM_KEYUP||m==BM_CLICK||m==BM_SETCHECK)setMotion(h,kCheck,SendMessageW(h,BM_GETCHECK,0,0)==BST_CHECKED?1.f:0.f);
     if(m==WM_UPDATEUISTATE||m==BM_SETCHECK||m==WM_ENABLE||m==WM_SETFOCUS||m==WM_KILLFOCUS||m==WM_KEYUP||m==WM_LBUTTONUP)InvalidateRect(h,nullptr,FALSE);
     return result;
@@ -180,7 +182,7 @@ LRESULT CALLBACK themedControl(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PT
     if((m==WM_ENABLE&&!w)||(m==WM_SHOWWINDOW&&!w)||m==WM_CANCELMODE)resetInteraction(h);
     if(m==WM_SHOWWINDOW&&!w)motionFinish(h);
     if(m==WM_TIMER&&w==kMotionTimer){motionTick(h);return 0;}
-    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Hover");}
+    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Checked");RemovePropW(h,L"LG.IsSwitch");RemovePropW(h,L"LG.Hover");}
     if(comboControl){
         if(m==WM_MOUSEMOVE&&IsWindowEnabled(h)){trackHover(h);setMotion(h,kHover,1.f);}
         if(m==WM_MOUSELEAVE){RemovePropW(h,L"LG.Hover");setMotion(h,kHover,0.f);}
@@ -215,7 +217,7 @@ LRESULT CALLBACK modernSlider(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR
     if((m==WM_ENABLE&&!w)||(m==WM_SHOWWINDOW&&!w)||m==WM_CANCELMODE)resetInteraction(h);
     if(m==WM_SHOWWINDOW&&!w)motionFinish(h);
     if(m==WM_TIMER&&w==kMotionTimer){motionTick(h);return 0;}
-    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Hover");}
+    if(m==WM_NCDESTROY){motionRelease(h);RemovePropW(h,L"LG.Checked");RemovePropW(h,L"LG.IsSwitch");RemovePropW(h,L"LG.Hover");}
     if(m==WM_MOUSEMOVE&&IsWindowEnabled(h)){trackHover(h);setMotion(h,kHover,1);}
     if(m==WM_MOUSELEAVE){RemovePropW(h,L"LG.Hover");setMotion(h,kHover,0);}
     if(m==WM_LBUTTONDOWN&&IsWindowEnabled(h))setMotion(h,kPress,1);
@@ -232,7 +234,7 @@ LRESULT CALLBACK modernSlider(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR
     auto result=DefSubclassProc(h,m,w,l);if(m==TBM_SETPOS||m==WM_KEYDOWN||m==WM_MOUSEMOVE||m==WM_SETFOCUS||m==WM_KILLFOCUS||m==WM_UPDATEUISTATE||m==WM_ENABLE)InvalidateRect(h,nullptr,FALSE);return result;
 }
 bool drawModernControl(DRAWITEMSTRUCT* item){
-    if(!item)return false;HDC dc=item->hDC;RECT r=item->rcItem;
+    if(!item)return false;HDC dc=item->hDC;RECT r=item->rcItem;if(item->CtlType==ODT_BUTTON&&GetPropW(item->hwndItem,L"LG.IsSwitch")){int saved=SaveDC(dc);paintCompactSwitch(item->hwndItem,dc);RestoreDC(dc,saved);return true;}
     if(item->CtlType==ODT_COMBOBOX){int saved=SaveDC(dc);bool selected=(item->itemState&ODS_SELECTED)!=0;HBRUSH brush=CreateSolidBrush(selected?palette().selection:cardColor());FillRect(dc,&r,brush);DeleteObject(brush);if(item->itemID!=static_cast<UINT>(-1)){wchar_t label[512]{};SendMessageW(item->hwndItem,CB_GETLBTEXT,item->itemID,reinterpret_cast<LPARAM>(label));r.left+=MulDiv(8,dpi,96);if(GetDlgCtrlID(item->hwndItem)==ColorTheme)drawThemeSwatch(dc,r,(int)item->itemID);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,textColor());SelectObject(dc,font);DrawTextW(dc,label,-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);}RestoreDC(dc,saved);return true;}
     if(item->CtlType==ODT_LISTBOX){int saved=SaveDC(dc);bool selected=(item->itemState&ODS_SELECTED)!=0;auto mo=motionOf(item->hwndItem);mo->painted=true;bool hot=(INT_PTR)GetPropW(item->hwndItem,L"LG.HotRow")==INT_PTR(item->itemID)+1;HBRUSH b=CreateSolidBrush(selected?palette().selection:mix(cardColor(),palette().selection,hot?mo->v[kHover]:0));FillRect(dc,&r,b);DeleteObject(b);if(item->itemID<entries.size()){auto&e=entries[item->itemID];int iconSize=MulDiv(28,dpi,96),gap=MulDiv(10,dpi,96);if(e.icon)DrawIconEx(dc,r.left+gap,r.top+(r.bottom-r.top-iconSize)/2,e.icon,iconSize,iconSize,0,nullptr,DI_NORMAL);RECT text=r;text.left+=iconSize+2*gap;text.top+=MulDiv(3,dpi,96);text.bottom=text.top+MulDiv(23,dpi,96);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,textColor());SelectObject(dc,actionFont);DrawTextW(dc,e.exe.c_str(),-1,&text,DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);text.top+=MulDiv(21,dpi,96);text.bottom=r.bottom;SetTextColor(dc,palette().pressed);SelectObject(dc,font);DrawTextW(dc,e.title.c_str(),-1,&text,DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);}if((item->itemState&ODS_FOCUS)&&!(item->itemState&ODS_NOFOCUSRECT)){InflateRect(&r,-2,-2);DrawFocusRect(dc,&r);}RestoreDC(dc,saved);return true;}
     bool tab=item->CtlType==ODT_TAB;if(!tab&&item->CtlType!=ODT_BUTTON)return false;int saved=SaveDC(dc);

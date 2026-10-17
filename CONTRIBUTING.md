@@ -56,7 +56,7 @@ Alternatively, use `./build.ps1 -BuildTests` with MinGW clang++ (the installed W
 ## Validation
 
 - Keep every user-facing caption in all five languages; first launch defaults to English, saved choices persist.
-- Glass rules preserve taskbar geometry. Dock transforms icons visually; smart hide is a separate, journaled opt-in feature. Do not intercept media keys or add duplicate indicators.
+- Glass rules preserve taskbar geometry. Dock transforms icons visually. Smart hide has been removed; retain the legacy taskbar-state recovery path. Do not intercept media keys or add duplicate indicators.
 - Preserve custom styles and recovery journals; restore original theme and module activation state when Off.
 - The self-test uses local fixtures and temporary files; it does not apply live system styles. DWM assertions are skipped where unsupported.
 - Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and whether other styling tools were running. Include memory in injected processes.

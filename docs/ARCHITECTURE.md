@@ -21,8 +21,7 @@ and disables motion. The self-test exercises control geometry and font recreatio
 at 96, 144, and 192 DPI across all five languages; this does not replace visual
 checks on actual monitors or a live high-contrast desktop.
 
-Efficiency changes in the current candidate: smart-hide's debounce timer is
-one-shot; UI accessibility and power preferences refresh on system broadcasts
+Efficiency changes in the current candidate: UI accessibility and power preferences refresh on system broadcasts
 instead of every paint; battery animations use a 32 ms frame interval; unchanged
 animation values skip invalidation. Language changes reuse the current window
 and icon list. Translation lookup uses a sorted pointer index, while diagnostic
@@ -59,7 +58,7 @@ References (original implementation; GPL mod sources are not bundled):
 
 0.11.0 experimental: composition_glass.h implements a shared Gaussian-blur and tint effect graph for system XAML and WinUI 3, with independent blur strength and explicit composition result reporting. Selected Liquid Glass surface names and layered-background behavior were studied from the user-provided Styler sources; their GPL implementations, theme engines, private-symbol hooks and Windhawk runtime are not copied or shipped. This is a focused standalone implementation, not a complete port of the mods. xaml_property_watch.h reapplies backgrounds after visual-state changes and unregisters callbacks on restoration. Inactive descriptors remain weak so enabling another switch does not require a fresh tree.
 
-dock_animation.h uses taskbar pointer events and short compositor scale animations, with no idle frame loop. It restores original visual scales and centers on disable and is suppressed by battery fallback. taskbar_autohide.h is separate: debounced window events choose maximized/overlapping auto-hide and preserve the original global AppBar state in a crash-recovery INI section. The Windows auto-hide flag is global, so this is not per-monitor private-shell-hook parity. It does not change taskbar icon size or layout settings. Competing taskbar behavior tools must be disabled before live validation.
+dock_animation.h uses taskbar pointer events and short compositor scale animations, with no idle frame loop. It restores original visual scales and centers on disable and is suppressed by battery fallback. Smart taskbar hide has been removed. src/taskbar_recovery.h only restores the original AppBar state recorded by earlier builds; it installs no hooks or timers.
 
 prepare-winrt.ps1 downloads fixed, SHA256-verified Microsoft build packages and generates framework headers. No Windhawk installation is required for the CMake/Visual Studio build. The GPU self-test creates a dispatcher queue and real composition blur graphs; that still does not establish shell attachment, independent surface behavior, or idle power consumption. Live checks remain necessary, especially with competing XAML diagnostic consumers.
 
