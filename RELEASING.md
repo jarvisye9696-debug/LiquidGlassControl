@@ -1,10 +1,10 @@
 # Releasing / 发布
 
-The repository and v0.9 preview downloads are public. Original contributions by the owner and DK use GPL-3.0-only; see LICENSE and LICENSING.md. See [Code signing policy](CODE-SIGNING.md) for the pending SignPath application and signing status. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
+The repository and v0.9 preview downloads are public. The owner's and DK's original code uses GPL-3.0-only; see LICENSING.md for authorization scope and contributor confirmation. Imported Styler material data and the modified engine carry GPLv3; preserve the supplied licenses and corresponding engine source in portable packages. See CODE-SIGNING.md for signing status. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
-2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.
-3. Build and verify on Windows 11. Test both UI languages and live effect restoration. CI self-tests do not verify Windhawk integration or every app's compatibility.
+2. Update `LG_VERSION` in `app_version.h`; captions/About, packaging and CI use it. Follow VERSIONING.md and do not reuse a tag.
+3. Build and verify on Windows 11. Test all five UI languages and live effect restoration. CI factory/unit tests do not verify live XAML styling. Complete the validation in ARCHITECTURE.md before release.
 4. Commit version changes, then push a tag matching the package version, for example `v0.9`:
 
    ```powershell
@@ -25,4 +25,8 @@ For a manual package:
 ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
 ```
 
-Never upload your personal `settings.ini`, original-style backups or test logs as release assets. Windhawk is not bundled. Preserve the guide's dependency and compatibility notes. Packages are currently unsigned. Link to the [Code signing policy](CODE-SIGNING.md) in new release descriptions; do not claim SignPath approval or signed downloads before verification.
+Never upload your personal `settings.ini`, original-style backups or test logs as release assets. The standalone engine is embedded; Windhawk is not required. Preserve the guide's dependency and compatibility notes. Packages are currently unsigned.
+
+The self-test program is separate from the user EXE. When passing an existing
+build to package.ps1, keep LiquidGlassTests.exe in the same build directory, or
+pass -TestExecutablePath explicitly. Only the user EXE is included in downloads.

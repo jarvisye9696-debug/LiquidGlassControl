@@ -1,8 +1,8 @@
 # Contributing / 参与开发
 
-Original contributions by the project owner and DK are licensed under GPL-3.0-only. See LICENSE and LICENSING.md for scope and contributor confirmation. New original contributions must use GPL-3.0-only; preserve notices and licenses for third-party components.
+The project owner's and DK's original contributions are licensed under GPL-3.0-only. See LICENSE and LICENSING.md for scope and third-party notices. The owner confirmed DK's agreement on 2026-10-16; other copyright holders must authorize any additional contributions.
 
-项目所有者与 DK 的原创贡献采用 GPL-3.0-only，授权范围见 LICENSING.md。新增原创贡献须使用相同许可证，第三方组件保留原许可证和声明。
+项目所有者与 DK 的原创贡献采用 GPL-3.0-only，范围和第三方许可证见 LICENSING.md。所有者已于 2026-10-16 确认 DK 同意；后续其他权利人的贡献仍需取得授权。新增贡献须遵守 LICENSING.md。
 
 ## Work together
 
@@ -27,37 +27,39 @@ git push -u origin HEAD
 
 ## Build on Windows
 
-Requirements: Windows 11 x64, CMake 3.20+, Visual Studio 2022 Build Tools with Desktop development with C++ and the Windows SDK. Windhawk is optional for compiling and for the self-test, but is required for specialized live effects.
+Requirements: Windows 11 x64, CMake 3.20+, Visual Studio 2022 Build Tools with Desktop development with C++ and the Windows SDK. Windhawk is not required for compilation, self-tests or the experimental standalone engine.
 
 ```powershell
+./prepare-winrt.ps1
 cmake -S . -B build/cmake -A x64
 cmake --build build/cmake --config Release
-$test = Start-Process build/cmake/Release/LiquidGlassControl.exe -ArgumentList '--self-test' -PassThru -Wait
+$test = Start-Process build/cmake/Release/LiquidGlassTests.exe -ArgumentList '--self-test' -PassThru -Wait
 if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 Get-Content build/cmake/Release/self-test.txt
 ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
 ```
 
-Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk compiler is detected), then `./package.ps1 -SkipBuild`.
+Alternatively, use `./build.ps1 -BuildTests` with MinGW clang++ (the installed Windhawk compiler is detected), then `./package.ps1 -SkipBuild`.
 
 ## Project map
 
 | File | Responsibility |
 |---|---|
 | `main.cpp` | Window lifecycle, settings, applying/restoring effects, self-test |
-| `control_ui.h` | Controls and Chinese/English captions |
+| `control_ui.h` | Controls and five-language captions |
 | `ui_style.h` | Fonts and GDI rendering |
 | `native_osd.h`, `native_switches.h` | Native volume/brightness styles and restoration journals |
+| `shell_materials.h`, `shell_materials_test.h` | Independent shell background rules, journals and isolated registry tests |
 | `explorer_background.h` | Explorer-specific styles and restoration |
 | `package.ps1`, `release/` | Clean portable distribution and user instructions |
 
 ## Validation
 
-- Keep every user-facing caption paired in Chinese and English; first launch defaults to English, saved choices persist.
-- Do not change taskbar layout, switch its theme, intercept media keys, or add a duplicate volume/brightness overlay.
-- Native styling must remain scoped to the native indicators and support restoration. Keep users' recovery journals.
+- Keep every user-facing caption in all five languages; first launch defaults to English, saved choices persist.
+- Glass rules preserve taskbar geometry. Dock transforms icons visually; smart hide is a separate, journaled opt-in feature. Do not intercept media keys or add duplicate indicators.
+- Preserve custom styles and recovery journals; restore original theme and module activation state when Off.
 - The self-test uses local fixtures and temporary files; it does not apply live system styles. DWM assertions are skipped where unsupported.
-- Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and relevant Windhawk mod versions.
+- Manually verify UI changes on Windows 11. For live effects, test apply and restore, independent On/Off states and reduced-motion behavior. Record Windows build and whether other styling tools were running. Include memory in injected processes.
 - Do not describe entry transitions as smooth numeric progress animation. The latter is not implemented yet.
 - Do not commit personal INI files, recovery backups, local logs, `build/` or `dist/`.
 

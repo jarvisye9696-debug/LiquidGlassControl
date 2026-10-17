@@ -1,0 +1,7 @@
+EXPORTS
+    DllGetClassObject
+    DllCanUnloadNow
+    GlassHook
+    GlassMessageHook
+    GlassGraphicsTest
+    GlassConnectTest
