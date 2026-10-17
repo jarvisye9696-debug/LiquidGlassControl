@@ -357,7 +357,7 @@ DWORD WINAPI attachFramework(void*arg){int modern=(int)(INT_PTR)arg;CoInitialize
 extern "C" HRESULT WINAPI DllGetClassObject(REFCLSID id,REFIID iid,void**p){if(id!=glass::TapId&&id!=glass::runtimeTapId(runtimePath()))return CLASS_E_CLASSNOTAVAILABLE;auto f=new Factory;auto hr=f->QueryInterface(iid,p);f->Release();return hr;}
 extern "C" HRESULT WINAPI DllCanUnloadNow(){return S_FALSE;}
 extern "C" __declspec(dllexport) HRESULT WINAPI GlassGraphicsTest(){
-    if(!imported_glass::test()||!liquid::testCapsulePlacement())return E_FAIL;
+    if(!imported_glass::test()||!liquid::testCapsulePlacement()||!liquid::testDockWeight())return E_FAIL;
     auto subscriptionTest=xaml_subscription::test();if(FAILED(subscriptionTest))return subscriptionTest;
     struct QueueOptions{DWORD size;int thread,apartment;};
     HMODULE messaging=LoadLibraryExW(L"CoreMessaging.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);if(!messaging)return HRESULT_FROM_WIN32(GetLastError());
