@@ -8,7 +8,6 @@ inline const wchar_t* theme(int kind){return kind==2?L"LiquidGlass":L"LiquidGlas
 inline std::wstring file(int kind,const std::wstring&dir,bool module=false){const wchar_t*names[]={L"taskbar",L"start-menu",L"notification"};if(kind<0||kind>2)throw std::runtime_error("kind");return dir+names[kind]+(module?L"-module-originals.bin":L"-theme-originals.bin");}
 inline bool exists(int kind,const std::wstring&dir){return GetFileAttributesW(file(kind,dir).c_str())!=INVALID_FILE_ATTRIBUTES;}
 inline bool pending(int kind,const std::wstring&dir){return exists(kind,dir)||GetFileAttributesW(file(kind,dir,true).c_str())!=INVALID_FILE_ATTRIBUTES;}
-inline bool installed(int kind){Key root;return RegOpenKeyExW(HKEY_LOCAL_MACHINE,shell_materials::keyPath(kind).c_str(),0,KEY_QUERY_VALUE|KEY_WOW64_64KEY,&root.h)==ERROR_SUCCESS;}
 inline Value disabled(DWORD state){Value v;v.name=L"Disabled";v.type=REG_DWORD;auto p=reinterpret_cast<BYTE*>(&state);v.data.assign(p,p+4);return v;}
 inline void save(const std::wstring&path,int kind,const Value&v){
     HANDLE h=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);if(h==INVALID_HANDLE_VALUE)throw std::runtime_error("theme backup");

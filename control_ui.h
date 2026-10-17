@@ -10,7 +10,7 @@ void fitTabItems(HWND tab){
     InvalidateRect(tab,nullptr,TRUE);
 }
 void localize(){
-    SetWindowTextW(mainWindow,L"Liquid Glass · v0.11.1");
+    SetWindowTextW(mainWindow,L"Liquid Glass · v" LG_VERSION_W);
     struct Text{int id;const wchar_t*zh;const wchar_t*en;};
     const Text texts[]={
       {Header,L"Liquid Glass",L"Liquid Glass"},{Refresh,L"刷新窗口",L"Refresh windows"},{Apply,L"应用",L"Apply"},{Restore,L"还原",L"Restore"},{Pause,L"隐藏至托盘",L"Hide to tray"},
@@ -25,7 +25,7 @@ void localize(){
       {EffectNote,L"更改后自动保存并应用；只调整材质，不改变任务栏尺寸。\r\n独立模糊与着色滑块；Dock 动画和智能隐藏单独开启。",L"Changes are saved and applied; taskbar geometry is preserved.\r\nIndependent blur and tint controls; Dock and smart hide have separate switches."},
       {LanguageLabel,L"界面语言",L"Interface language"},{ColorThemeLabel,L"界面配色",L"Interface color"},{StartupAnimation,L"程序启动时淡入并轻轻上移",L"Fade and gently slide the app in at startup"},
       {SettingsNote,L"语言、配色和启动动画偏好自动保存。\r\n关闭设置窗口会继续在托盘运行。",L"Language, color and startup animation preferences are saved automatically.\r\nClosing settings keeps the app running in the tray."},
-      {AboutText,L"Liquid Glass 0.11.1\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass 0.11.1\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
+      {AboutText,L"Liquid Glass " LG_VERSION_W L"\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass " LG_VERSION_W L"\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
       {DockHeading,L"Dock 悬停动画",L"Dock hover animation"},{DockToggle,L"Dock 悬停动画",L"Dock hover animation"},{AutoHideHeading,L"任务栏智能隐藏（最大化或遮挡时）",L"Smart taskbar hide (maximized or overlapping)"},{AutoHideToggle,L"任务栏智能隐藏",L"Smart taskbar hide"},
       {CapsuleHeading,L"任务栏胶囊",L"Taskbar capsule"},{CapsuleToggle,L"胶囊任务栏",L"Capsule taskbar"},
       {ExitApp,L"还原并退出",L"Restore and exit"}

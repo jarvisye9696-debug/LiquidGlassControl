@@ -8,7 +8,7 @@ int restoreLegacy(const std::wstring&dir){
     auto ini=dir+L"settings.ini";
     WritePrivateProfileStringW(L"Native",L"VolumeOn",L"0",ini.c_str());WritePrivateProfileStringW(L"Native",L"BrightnessOn",L"0",ini.c_str());
     if(GetFileAttributesW((dir+L"native-osd-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES||GetFileAttributesW((dir+L"native-osd-switches.bin").c_str())!=INVALID_FILE_ATTRIBUTES){int code=full_themes::nativeOperation(0,false,dir,true);if(code)return code;}
-    if(GetFileAttributesW((dir+L"explorer-background-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES){int code=explorer_background::run(L"",true,dir);if(code)return code;}
+    if(GetFileAttributesW((dir+L"explorer-background-originals.bin").c_str())!=INVALID_FILE_ATTRIBUTES){int code=explorer_background::restore(dir);if(code)return code;}
     for(int i=0;i<3;++i){int code=full_themes::operation(i,false,dir);if(code)return code;}
     return shell_materials::cleanupTaskbar(dir);
 }
