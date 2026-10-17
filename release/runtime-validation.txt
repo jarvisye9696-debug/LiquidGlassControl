@@ -20,3 +20,5 @@ Bad Image dialog. Local compilation does not establish runtime compatibility.
 The desktop shortcut still targets build/LiquidGlassControl.exe. It was restored
 to the previous installed 0.11.0 executable, with the test feature switches Off.
 No new effect is claimed to work on this device from the isolated tests alone.
+
+0.11.1 source update: replaced the IAT subscription shim with the upstream-style registry API hooks (MinHook), imported material-only LiquidGlass rules from all four supplied Stylers, and added isolated regression coverage. The 0.11.1 binary is not executed locally because the device policy prerequisite remains unresolved. Desktop stays at the previously installed 0.11.0.

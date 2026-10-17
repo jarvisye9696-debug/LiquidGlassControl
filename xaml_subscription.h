@@ -1,39 +1,71 @@
 #pragma once
+// SPDX-License-Identifier: GPL-3.0-only
+// Adapted from m417z, Windows 11 Taskbar Styler 1.10, registry compatibility
+// hooks (user-supplied source). See third_party/windhawk/README.md and COPYING.
+// Windhawk hook installation is replaced with statically linked MinHook.
 #include <windows.h>
-#include <vector>
+#include "third_party/minhook/include/MinHook.h"
 namespace xaml_subscription {
-// Opt out of the optional composition-diagnostics walk while subscribing to
-// XAML visual mutations. Some shell builds abort that optional walk with
-// E_UNEXPECTED. This affects only these registry reads on this worker thread;
-// it does not write a registry value or change system/security settings.
 inline thread_local bool subscribing=false;
-inline SRWLOCK patchLock=SRWLOCK_INIT;
+inline decltype(&RegOpenKeyExW) originalOpen=nullptr;
+inline decltype(&RegQueryValueExW) originalQuery=nullptr;
 inline LSTATUS WINAPI openKey(HKEY key,LPCWSTR sub,DWORD options,REGSAM access,PHKEY result){
-    auto status=RegOpenKeyExW(key,sub,options,access,result);
-    if(subscribing&&(status==ERROR_FILE_NOT_FOUND||status==ERROR_PATH_NOT_FOUND)&&key==HKEY_LOCAL_MACHINE&&sub&&_wcsicmp(sub,L"Software\\Microsoft\\XAML\\Debug")==0)
-        return RegOpenKeyExW(HKEY_LOCAL_MACHINE,L"Software\\Microsoft",options,access,result);
-    return status;
+    LSTATUS status=originalOpen(key,sub,options,access,result);
+    if(status==ERROR_SUCCESS||!subscribing||key!=HKEY_LOCAL_MACHINE||!sub||_wcsicmp(sub,L"Software\\Microsoft\\XAML\\Debug")!=0)return status;
+    // The XAML key often doesn't exist. This is a read-only substitute handle;
+    // nothing is written to the real registry, as in the upstream implementation.
+    return originalOpen(HKEY_LOCAL_MACHINE,L"Software\\Microsoft",options,access,result);
 }
 inline LSTATUS WINAPI queryValue(HKEY key,LPCWSTR name,LPDWORD reserved,LPDWORD type,LPBYTE data,LPDWORD bytes){
-    if(!subscribing||!name||_wcsicmp(name,L"DisableCompositionDiag")!=0)return RegQueryValueExW(key,name,reserved,type,data,bytes);
-    if(data&&!bytes)return ERROR_INVALID_PARAMETER;if(type)*type=REG_DWORD;
-    if(data&&*bytes<sizeof(DWORD)){*bytes=sizeof(DWORD);return ERROR_MORE_DATA;}
-    if(data){DWORD value=1;memcpy(data,&value,sizeof(value));}if(bytes)*bytes=sizeof(DWORD);return ERROR_SUCCESS;
+    if(!subscribing||!name||_wcsicmp(name,L"DisableCompositionDiag")!=0)return originalQuery(key,name,reserved,type,data,bytes);
+    if(type)*type=REG_DWORD;
+    if(data&&(!bytes||*bytes<sizeof(DWORD))){if(bytes)*bytes=sizeof(DWORD);return ERROR_MORE_DATA;}
+    if(data)*reinterpret_cast<DWORD*>(data)=1;
+    if(bytes)*bytes=sizeof(DWORD);
+    return ERROR_SUCCESS;
+}
+inline INIT_ONCE once=INIT_ONCE_STATIC_INIT;
+inline HRESULT initialization=E_PENDING;
+inline BOOL CALLBACK initialize(PINIT_ONCE,void*,void**){
+    HMODULE base=GetModuleHandleW(L"kernelbase.dll");
+    auto open=base?GetProcAddress(base,"RegOpenKeyExW"):nullptr;
+    auto query=base?GetProcAddress(base,"RegQueryValueExW"):nullptr;
+    if(!open||!query){initialization=HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);return TRUE;}
+    auto status=MH_Initialize();
+    if(status!=MH_OK&&status!=MH_ERROR_ALREADY_INITIALIZED){initialization=E_FAIL;return TRUE;}
+    status=MH_CreateHook((void*)open,(void*)&openKey,(void**)&originalOpen);
+    if(status!=MH_OK){initialization=E_FAIL;return TRUE;}
+    status=MH_CreateHook((void*)query,(void*)&queryValue,(void**)&originalQuery);
+    if(status!=MH_OK){MH_RemoveHook((void*)open);initialization=E_FAIL;return TRUE;}
+    // Enable only hooks owned by this engine, never MH_ALL_HOOKS.
+    status=MH_EnableHook((void*)open);
+    if(status==MH_OK){status=MH_EnableHook((void*)query);if(status!=MH_OK)MH_DisableHook((void*)open);}
+    if(status!=MH_OK){MH_RemoveHook((void*)query);MH_RemoveHook((void*)open);initialization=E_FAIL;return TRUE;}
+    HMODULE pinned{};GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,(LPCWSTR)&initialize,&pinned);
+    initialization=S_OK;return TRUE;
 }
 class Scope {
-    struct Slot {void**address;void*original;void*replacement;};std::vector<Slot> slots;
-    void patch(HMODULE module){if(!module)return;auto base=(BYTE*)module;auto dos=(IMAGE_DOS_HEADER*)base;if(dos->e_magic!=IMAGE_DOS_SIGNATURE)return;auto nt=(IMAGE_NT_HEADERS*)(base+dos->e_lfanew);if(nt->Signature!=IMAGE_NT_SIGNATURE)return;
-        auto rva=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;if(!rva)return;
-        for(auto entry=(IMAGE_IMPORT_DESCRIPTOR*)(base+rva);entry->Name;++entry){if(!entry->OriginalFirstThunk)continue;auto names=(IMAGE_THUNK_DATA*)(base+entry->OriginalFirstThunk),addresses=(IMAGE_THUNK_DATA*)(base+entry->FirstThunk);
-            for(;names->u1.AddressOfData;++names,++addresses){if(IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal))continue;auto name=(const char*)((IMAGE_IMPORT_BY_NAME*)(base+names->u1.AddressOfData))->Name;
-                void*replacement=strcmp(name,"RegOpenKeyExW")==0?(void*)&openKey:strcmp(name,"RegQueryValueExW")==0?(void*)&queryValue:nullptr;if(!replacement)continue;
-                if(slots.size()==slots.capacity())return;auto slot=(void**)&addresses->u1.Function;DWORD old=0;if(VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&old)){auto original=InterlockedExchangePointer(slot,replacement);slots.push_back({slot,original,replacement});DWORD ignored=0;VirtualProtect(slot,sizeof(void*),old,&ignored);}
-            }
-        }
-    }
+    bool previous;
 public:
-    explicit Scope(IUnknown*service){slots.reserve(16);AcquireSRWLockExclusive(&patchLock);HMODULE module{};if(service){auto function=(*(void***)service)[3];GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)function,&module);}patch(module);auto system=GetModuleHandleW(L"Windows.UI.Xaml.dll");if(system!=module)patch(system);subscribing=true;}
-    ~Scope(){subscribing=false;for(auto i=slots.rbegin();i!=slots.rend();++i){DWORD old=0;if(VirtualProtect(i->address,sizeof(void*),PAGE_READWRITE,&old)){InterlockedCompareExchangePointer(i->address,i->original,i->replacement);DWORD ignored=0;VirtualProtect(i->address,sizeof(void*),old,&ignored);}}ReleaseSRWLockExclusive(&patchLock);}
+    explicit Scope(IUnknown* =nullptr):previous(subscribing){InitOnceExecuteOnce(&once,initialize,nullptr,nullptr);if(SUCCEEDED(initialization))subscribing=true;}
+    ~Scope(){subscribing=previous;}
+    HRESULT status()const{return initialization;}
     Scope(Scope const&)=delete;Scope&operator=(Scope const&)=delete;
 };
+// Invoked only by the isolated self-test process, never against the live shell.
+inline HRESULT test(){
+    HKEY key{};if(RegOpenKeyExW(HKEY_LOCAL_MACHINE,L"Software\\Microsoft",0,KEY_QUERY_VALUE,&key)!=ERROR_SUCCESS)return E_FAIL;
+    auto module=GetModuleHandleW(L"kernelbase.dll");auto query=(decltype(&RegQueryValueExW))GetProcAddress(module,"RegQueryValueExW");
+    if(!query){RegCloseKey(key);return E_FAIL;}
+    DWORD before{},bytes=4;auto baseline=query(key,L"DisableCompositionDiag",nullptr,nullptr,(BYTE*)&before,&bytes);
+    bool ok=true;{Scope scope;ok=SUCCEEDED(scope.status());DWORD type{},value{},size=4;
+        ok=ok&&query(key,L"DisableCompositionDiag",nullptr,&type,(BYTE*)&value,&size)==ERROR_SUCCESS&&type==REG_DWORD&&value==1&&size==4;
+        BYTE small=0x5a;size=1;ok=ok&&query(key,L"DisableCompositionDiag",nullptr,nullptr,&small,&size)==ERROR_MORE_DATA&&small==0x5a&&size==4;
+        struct Context{HKEY key;decltype(query) function;LSTATUS expected;DWORD value;bool ok=false;}ctx{key,query,baseline,before};
+        HANDLE thread=CreateThread(nullptr,0,[](void*p)->DWORD{auto&c=*(Context*)p;DWORD value{},size=4;auto result=c.function(c.key,L"DisableCompositionDiag",nullptr,nullptr,(BYTE*)&value,&size);c.ok=result==c.expected&&(result!=ERROR_SUCCESS||value==c.value);return 0;},&ctx,0,nullptr);
+        if(thread){WaitForSingleObject(thread,INFINITE);CloseHandle(thread);ok=ctx.ok&&ok;}else ok=false;
+    }
+    DWORD after{};bytes=4;auto result=query(key,L"DisableCompositionDiag",nullptr,nullptr,(BYTE*)&after,&bytes);RegCloseKey(key);
+    return ok&&result==baseline&&(result!=ERROR_SUCCESS||before==after)?S_OK:E_FAIL;
+}
 }

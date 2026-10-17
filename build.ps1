@@ -12,7 +12,14 @@ New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $engineIncludes = @()
 if (-not $WinrtInclude -and (Test-Path (Join-Path $outputDir 'winrt\include\winrt\Microsoft.UI.Xaml.h'))) { $WinrtInclude = Join-Path $outputDir 'winrt\include' }
 if ($WinrtInclude) { $engineIncludes = @('-I' + [IO.Path]::GetFullPath($WinrtInclude)) }
-& $Compiler --target=x86_64-w64-mingw32 -std=c++20 @engineIncludes -O2 -Wall -Wextra -shared -static (Join-Path $PSScriptRoot 'glass_engine.cpp') (Join-Path $PSScriptRoot 'glass_engine.def') -o (Join-Path $outputDir 'GlassEngine.dll') -lole32 -loleaut32 -luuid -lruntimeobject -lcomctl32 -ldwmapi -ladvapi32 -ld2d1
+$hookObjects = @()
+foreach ($unit in @('buffer','hook','trampoline','hde/hde64')) {
+    $object = Join-Path $outputDir (($unit.Replace('/','-')) + '.o')
+    & $Compiler --target=x86_64-w64-mingw32 -x c -O2 -c (Join-Path $PSScriptRoot "third_party/minhook/src/$unit.c") -o $object
+    if ($LASTEXITCODE -ne 0) { throw 'MinHook compilation failed.' }
+    $hookObjects += $object
+}
+& $Compiler --target=x86_64-w64-mingw32 -std=c++20 @engineIncludes -O2 -Wall -Wextra -shared -static (Join-Path $PSScriptRoot 'glass_engine.cpp') (Join-Path $PSScriptRoot 'glass_engine.def') @hookObjects -o (Join-Path $outputDir 'GlassEngine.dll') -lole32 -loleaut32 -luuid -lruntimeobject -lcomctl32 -ldwmapi -ladvapi32 -ld2d1
 if ($LASTEXITCODE -ne 0) { throw 'Engine compilation failed.' }
 $engineBytes = [IO.File]::ReadAllBytes((Join-Path $outputDir 'GlassEngine.dll'))
 $noticeBytes = [IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'release\Third Party Notices.txt'))

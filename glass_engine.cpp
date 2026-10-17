@@ -24,6 +24,7 @@
 #include "dock_animation.h"
 #include "xaml_property_watch.h"
 #include "xaml_subscription.h"
+#include "windhawk_materials.h"
 namespace {
 template<class T> struct Ptr {
     T*p=nullptr;Ptr()=default;explicit Ptr(T*v):p(v){};~Ptr(){if(p)p->Release();}
@@ -66,7 +67,7 @@ bool connect(DWORD pid){
     ReleaseSRWLockExclusive(&configLock);return true;
 }
 struct Saved {unsigned index{};bool local=false;Ptr<IInspectable> value;};
-struct Node {Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;DWORD appliedSignature=0;bool composition=false,fallback=false;};
+struct Node {std::vector<const wchar_t*> imported;Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;DWORD appliedSignature=0;bool composition=false,fallback=false;};
 class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     std::atomic<ULONG> refs{1};Ptr<IUnknown> site;Ptr<IXamlDiagnostics> diag;Ptr<IVisualTreeService2> service;Ptr<CacheRelease> cache;
     struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::set<InstanceHandle> release;ULONGLONG lastMutation=0;bool updating=false;bool taskbarPanel=false;liquid::DockAnimation dock;~Thread(){for(auto&n:nodes)for(auto&w:n.second.watchers)w.second();}};
@@ -145,18 +146,41 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
         typed(n,h,rectangle?L"StrokeThickness":L"BorderThickness",rectangle?L"Double":L"Thickness",L"1");
         if(rectangle){typed(n,h,L"RadiusX",L"Double",std::to_wstring(c.radius));typed(n,h,L"RadiusY",L"Double",std::to_wstring(c.radius));}
     }
+    std::vector<const wchar_t*> importedStyles(IInspectable*p){
+        std::vector<imported_glass::Element> ancestry;winrt::Windows::Foundation::IInspectable object{nullptr};winrt::copy_from_abi(object,p);
+        try{for(unsigned i=0;object&&i<24;++i){std::wstring name;winrt::Windows::Foundation::IInspectable parent{nullptr};
+            if(modern){auto e=object.try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>();if(e)name=e.Name();auto d=object.try_as<winrt::Microsoft::UI::Xaml::DependencyObject>();if(d)parent=winrt::Microsoft::UI::Xaml::Media::VisualTreeHelper::GetParent(d);}
+            else{auto e=object.try_as<winrt::Windows::UI::Xaml::FrameworkElement>();if(e)name=e.Name();auto d=object.try_as<winrt::Windows::UI::Xaml::DependencyObject>();if(d)parent=winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetParent(d);}
+            ancestry.push_back({winrt::get_class_name(object).c_str(),name});object=parent;}
+        }catch(...){trace("theme ancestry",winrt::to_hresult());}
+        return imported_glass::styles(imported_glass::theme(host),ancestry);
+    }
+    bool applyImported(Node&n,InstanceHandle h,const glass::Config&c){bool applied=false;
+        for(auto rule:n.imported){std::wstring property,value;if(!imported_glass::assignment(rule,property,value))continue;value=imported_glass::resolve(imported_glass::theme(host),value);
+            if(property==L"Background"||property==L"Fill"||property==L"BorderBrush"||property==L"Stroke"){
+                bool background=property==L"Background"||property==L"Fill";Ptr<IInspectable> result;
+                if(value.find(L"<WindhawkBlur")==0){bool custom=false,fallback=false;result=brush(c,false,h,background?glass::feature(n.surface):0,custom,fallback);if(background){n.composition=custom;n.fallback=fallback;}}
+                else if(value==L"Transparent"||value.empty()){bool custom=false,fallback=false;result=brush(c,true,h,glass::feature(n.surface),custom,fallback);}
+                else if(!value.empty()&&value.front()==L'<'){auto at=value.find(L' ');if(at!=value.npos)value.insert(at,L" xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"");result=markup(value);}
+                if(result){bool ok=set(n,h,property,result.p,background);applied=ok||applied;}
+            }else if(property==L"CornerRadius")typed(n,h,property.c_str(),L"CornerRadius",std::to_wstring(c.radius));
+            else if(property==L"BorderThickness")typed(n,h,property.c_str(),L"Thickness",value);
+            else if(property==L"StrokeThickness")typed(n,h,property.c_str(),L"Double",value);
+        }return applied;
+    }
     void apply(Node&n,InstanceHandle h,const glass::Config&c){
         if(n.surface==glass::DockRoot||n.surface==glass::DockIcon){auto&t=thread();if(!(c.features&glass::Dock)||c.economy){t.dock.stop();return;}auto p=from(h);if(p){if(n.surface==glass::DockRoot){if(!t.dock.attach(p.p))report(E_NOINTERFACE,glass::Dock);}else t.dock.add(p.p);if(t.dock.ready())report(S_OK,glass::Dock);}return;}
         if(!glass::active(n.surface,c.features)){restore(n,h);return;}DWORD signature=1|(c.opacity<<1)|(c.radius<<8)|(c.tint<<13)|(c.economy?1u<<15:0)|(c.blur<<16);if(n.appliedSignature==signature)return;
-        auto b=brush(c,(n.surface==glass::TaskbarFill&&thread().taskbarPanel)||n.surface==glass::OsdPlate||n.surface==glass::StartOverlay||n.surface==glass::TaskbarOverlay||n.surface==glass::StartClear||n.surface==glass::NotificationClear||n.surface==glass::ExplorerClear,h,glass::feature(n.surface),n.composition,n.fallback);if(!b)return;
-        bool applied=set(n,h,(n.surface==glass::TaskbarFill||n.surface==glass::TaskbarOverlay)?L"Fill":L"Background",b.p);
+        bool applied=false;if(!n.imported.empty())applied=applyImported(n,h,c);else{auto b=brush(c,(n.surface==glass::TaskbarFill&&thread().taskbarPanel)||n.surface==glass::OsdPlate||n.surface==glass::StartOverlay||n.surface==glass::TaskbarOverlay||n.surface==glass::StartClear||n.surface==glass::NotificationClear||n.surface==glass::ExplorerClear,h,glass::feature(n.surface),n.composition,n.fallback);if(!b)return;
+        applied=set(n,h,(n.surface==glass::TaskbarFill||n.surface==glass::TaskbarOverlay)?L"Fill":L"Background",b.p);
         if(applied&&(n.surface==glass::TaskbarRoot||n.surface==glass::TaskbarFill||n.surface==glass::StartPlate||n.surface==glass::NotificationPlate||n.surface==glass::ExplorerPlate))edge(n,h,c);
         // Round only native material plates; never change layout constraints.
         if(n.surface==glass::StartPlate||n.surface==glass::NotificationPlate||n.surface==glass::TaskbarRoot||n.surface==glass::VolumePlate||n.surface==glass::BrightnessPlate){
             InstanceHandle r=0;BSTR type=SysAllocString(modern?L"Microsoft.UI.Xaml.CornerRadius":L"Windows.UI.Xaml.CornerRadius");auto text=std::to_wstring(c.radius);BSTR value=SysAllocString(text.c_str());
             if(SUCCEEDED(service->CreateInstance(type,value,&r))){auto p=from(r);if(p)set(n,h,L"CornerRadius",p.p,false);unregister(r);}SysFreeString(type);SysFreeString(value);
         }
-        if(applied){n.appliedSignature=signature;auto property=(n.surface==glass::TaskbarFill||n.surface==glass::TaskbarOverlay)?L"Fill":L"Background";if(!n.watchers.count(property))try{auto p=from(h);auto&t=thread();auto callback=liquid::watch(p.p,modern,property,[&t,h]{if(t.updating)return;auto node=t.nodes.find(h);if(node!=t.nodes.end()){node->second.appliedSignature=0;PostMessageW(t.window,WM_APP+4,0,0);}});if(callback)n.watchers.emplace(property,std::move(callback));}catch(...){trace("watch property",winrt::to_hresult());}}
+        }
+        if(applied){n.appliedSignature=signature;for(auto property:{L"Background",L"Fill",L"BorderBrush",L"Stroke"})if(n.saved.count(property)&&!n.watchers.count(property))try{auto p=from(h);auto&t=thread();auto callback=liquid::watch(p.p,modern,property,[&t,h]{if(t.updating)return;auto node=t.nodes.find(h);if(node!=t.nodes.end()){node->second.appliedSignature=0;PostMessageW(t.window,WM_APP+4,0,0);}});if(callback)n.watchers.emplace(property,std::move(callback));}catch(...){trace("watch property",winrt::to_hresult());}}
     }
     void update(Thread&t){if(t.updating)return;t.updating=true;glass::Config c;if(!snapshot(c))c.features=0;if(!(c.features&glass::Dock)||c.economy)t.dock.stop();
         for(auto i=t.nodes.begin();i!=t.nodes.end();){Ptr<IInspectable> p;if(i->second.weak) i->second.weak->Resolve(__uuidof(IInspectable),p.put());if(!p){for(auto&w:i->second.watchers)w.second();i=t.nodes.erase(i);continue;}
@@ -172,7 +196,7 @@ public:
         if(!service||wantsSubscription()==subscribed.load()||subscriptionWorker.exchange(true))return;
         AddRef();auto worker=CreateThread(nullptr,0,[](void*ctx)->DWORD{auto s=(Session*)ctx;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             for(int attempts=0;attempts<4;++attempts){bool wanted=s->wantsSubscription();if(wanted==s->subscribed.load())break;
-                HRESULT hr=S_OK;if(wanted){xaml_subscription::Scope scope(s->service.p);hr=s->service->AdviseVisualTreeChange(s);}else hr=s->service->UnadviseVisualTreeChange(s);trace("subscription result",hr);s->lastError=hr;if(FAILED(hr)){s->notify(hr);break;}s->subscribed=wanted;}
+                HRESULT hr=S_OK;if(wanted){xaml_subscription::Scope scope(s->service.p);hr=scope.status();if(SUCCEEDED(hr))hr=s->service->AdviseVisualTreeChange(s);}else hr=s->service->UnadviseVisualTreeChange(s);trace("subscription result",hr);s->lastError=hr;if(FAILED(hr)){s->notify(hr);break;}s->subscribed=wanted;}
             s->subscriptionWorker=false;s->Release();CoUninitialize();return 0;
         },this,0,nullptr);if(worker)CloseHandle(worker);else{subscriptionWorker=false;Release();}
     }
@@ -195,8 +219,10 @@ public:
                 if(host==0&&surface==glass::NoSurface)surface=glass::identify(element.Name?element.Name:L"",element.Type?element.Type:L"",3);
                 if(host==0&&surface==glass::NoSurface&&element.Name&&wcscmp(element.Name,L"RootGrid")==0&&relation.Parent){auto parent=from(relation.Parent);HSTRING type{};if(parent&&SUCCEEDED(parent->GetRuntimeClassName(&type))){auto name=WindowsGetStringRawBuffer(type,nullptr);if(name&&wcscmp(name,L"Taskbar.TaskbarFrame")==0){surface=glass::TaskbarRoot;t.taskbarPanel=true;}WindowsDeleteString(type);}}
 
-                if(surface!=glass::NoSurface){auto p=from(element.Handle);Ptr<IWeakReferenceSource> source;if(p&&SUCCEEDED(p->QueryInterface(__uuidof(IWeakReferenceSource),reinterpret_cast<void**>(source.put())))){
-                    Node n;n.surface=surface;source->GetWeakReference(n.weak.put());auto old=t.nodes.find(element.Handle);if(old!=t.nodes.end()){t.updating=true;restore(old->second,element.Handle);t.updating=false;if(!old->second.saved.empty()){releaseLater(t,element.Handle);return S_OK;}}t.nodes[element.Handle]=std::move(n);
+                auto target=from(element.Handle);auto imported=target&&imported_glass::candidate(imported_glass::theme(host),{element.Type?element.Type:L"",element.Name?element.Name:L""})?importedStyles(target.p):std::vector<const wchar_t*>{};
+                if(!imported.empty()&&surface==glass::NoSurface)surface=host==1?glass::StartPlate:host==2?glass::NotificationPlate:host==3?glass::ExplorerPlate:glass::TaskbarRoot;
+                if(surface!=glass::NoSurface){auto p=std::move(target);Ptr<IWeakReferenceSource> source;if(p&&SUCCEEDED(p->QueryInterface(__uuidof(IWeakReferenceSource),reinterpret_cast<void**>(source.put())))){
+                    Node n;n.imported=std::move(imported);n.surface=surface;source->GetWeakReference(n.weak.put());auto old=t.nodes.find(element.Handle);if(old!=t.nodes.end()){t.updating=true;restore(old->second,element.Handle);t.updating=false;if(!old->second.saved.empty()){releaseLater(t,element.Handle);return S_OK;}}t.nodes[element.Handle]=std::move(n);
                     glass::Config c;if(snapshot(c)){t.updating=true;apply(t.nodes[element.Handle],element.Handle,c);t.updating=false;}
                 }}releaseLater(t,element.Handle);releaseLater(t,relation.Parent);
             }else if(mutation==Remove){auto i=t.nodes.find(element.Handle);if(i!=t.nodes.end()){t.updating=true;restore(i->second,element.Handle);t.updating=false;for(auto&w:i->second.watchers)w.second();t.nodes.erase(i);}releaseLater(t,element.Handle);}
@@ -221,6 +247,8 @@ DWORD WINAPI attachFramework(void*arg){int modern=(int)(INT_PTR)arg;CoInitialize
 extern "C" HRESULT WINAPI DllGetClassObject(REFCLSID id,REFIID iid,void**p){if(id!=glass::TapId&&id!=glass::runtimeTapId(runtimePath()))return CLASS_E_CLASSNOTAVAILABLE;auto f=new Factory;auto hr=f->QueryInterface(iid,p);f->Release();return hr;}
 extern "C" HRESULT WINAPI DllCanUnloadNow(){return S_FALSE;}
 extern "C" __declspec(dllexport) HRESULT WINAPI GlassGraphicsTest(){
+    if(!imported_glass::test())return E_FAIL;
+    auto subscriptionTest=xaml_subscription::test();if(FAILED(subscriptionTest))return subscriptionTest;
     struct QueueOptions{DWORD size;int thread,apartment;};
     HMODULE messaging=LoadLibraryExW(L"CoreMessaging.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);if(!messaging)return HRESULT_FROM_WIN32(GetLastError());
     auto create=(HRESULT(WINAPI*)(QueueOptions,void**))GetProcAddress(messaging,"CreateDispatcherQueueController");Ptr<IUnknown> queue;
