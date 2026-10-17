@@ -30,4 +30,4 @@ Glass-style controls for **Windows 11 x64** · **Windows 11 x64** 玻璃效果�
 
 [Contributing / 参与开发](CONTRIBUTING.md) · [Build & release / 构建与发布](RELEASING.md)
 
-Preview version; no open-source license selected yet. / 当前为预览版，暂未选择开源许可证。
+License / 许可证: [GPL-3.0-only](LICENSE). See [licensing scope](LICENSING.md) and [Code signing policy / 代码签名政策](CODE-SIGNING.md). SignPath application submitted; approval pending. Current downloads remain unsigned. / 已提交 SignPath 申请，等待审核；当前下载仍未签名。

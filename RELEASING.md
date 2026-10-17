@@ -1,6 +1,6 @@
 # Releasing / 发布
 
-The repository and v0.9 preview downloads are public. No open-source license has been selected. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
+The repository and v0.9 preview downloads are public. Original contributions by the owner and DK use GPL-3.0-only; see LICENSE and LICENSING.md. See [Code signing policy](CODE-SIGNING.md) for the pending SignPath application and signing status. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
 2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.
@@ -25,4 +25,4 @@ For a manual package:
 ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
 ```
 
-Never upload your personal `settings.ini`, original-style backups or test logs as release assets. Windhawk is not bundled. Preserve the guide's dependency and compatibility notes. Packages are currently unsigned.
+Never upload your personal `settings.ini`, original-style backups or test logs as release assets. Windhawk is not bundled. Preserve the guide's dependency and compatibility notes. Packages are currently unsigned. Link to the [Code signing policy](CODE-SIGNING.md) in new release descriptions; do not claim SignPath approval or signed downloads before verification.
