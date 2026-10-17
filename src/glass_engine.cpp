@@ -19,11 +19,13 @@
 #include <algorithm>
 #include <cstdio>
 #include <set>
+#include <memory>
 #include "glass_protocol.h"
 #include "composition_glass.h"
 #include "dock_animation.h"
 #include "xaml_property_watch.h"
 #include "capsule_clip.h"
+#include "capsule_layout.h"
 #include "xaml_subscription.h"
 #include "windhawk_materials.h"
 namespace {
@@ -91,7 +93,7 @@ bool connect(DWORD pid){
     ReleaseSRWLockExclusive(&configLock);return true;
 }
 struct Saved {unsigned index{};bool local=false;Ptr<IInspectable> value;};
-struct Node {std::vector<const wchar_t*> imported;Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;std::wstring capsuleGeometry;DWORD appliedSignature=0;bool composition=false,fallback=false;HRESULT lastReport=S_FALSE;bool reported=false;HRESULT lastCapsule=E_NOINTERFACE;bool capsuleReported=false,capsuleDirty=true;};
+struct Node {std::vector<const wchar_t*> imported;Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;std::wstring capsuleGeometry;std::shared_ptr<liquid::CapsuleLayout> capsuleLayout;DWORD appliedSignature=0;bool composition=false,fallback=false;HRESULT lastReport=S_FALSE;bool reported=false;HRESULT lastCapsule=E_NOINTERFACE;bool capsuleReported=false,capsuleDirty=true;};
 class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     std::atomic<ULONG> refs{1};Ptr<IUnknown> site;Ptr<IXamlDiagnostics> diag;Ptr<IVisualTreeService2> service;Ptr<CacheRelease> cache;
     struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::set<InstanceHandle> release;ULONGLONG lastMutation=0,releaseStarted=0;bool updating=false,updateQueued=false;bool taskbarPanel=false,unifiedCapsule=false;unsigned retries{};liquid::DockAnimation dock;~Thread(){for(auto&n:nodes)for(auto&w:n.second.watchers)w.second();}};
@@ -203,7 +205,7 @@ if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::fea
             if(v.local){if(v.value)hr=diag->RegisterInstance(v.value.p,&old);if(SUCCEEDED(hr))hr=service->SetProperty(h,old,v.index);if(old)unregister(old);}else hr=service->ClearProperty(h,v.index);
             if(SUCCEEDED(hr))i=n.saved.erase(i);else{lastError=hr;++i;}}
     }
-    // Capsule: the visible taskbar fill becomes a centered pill with fully rounded ends. Only the fill's margins and corner radii change; no layout element is resized and the window area is untouched. Without measurable content the fill is left as it is.
+    // Reversible XAML transforms move app and tray hit targets together; the native taskbar window stays unchanged.
     void applyCapsule(Node&n,InstanceHandle h,const glass::Config&c){
         if(!(c.features&glass::Capsule))return;n.capsuleDirty=false;
         // Find the icon content through the taskbar subtree, rather than measuring
@@ -220,30 +222,36 @@ if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::fea
                 Element root=host;bool taskbar=false;
                 for(int depth=0;root&&depth<16;++depth){if(winrt::get_class_name(root)==L"Taskbar.TaskbarFrame"){taskbar=true;break;}root=Tree::GetParent(root).try_as<Element>();}
                 if(taskbar&&!n.watchers.count(L"CapsuleLayout")){auto&t=thread();auto token=root.LayoutUpdated([&t,h](auto const&,auto const&){if(t.updating)return;auto i=t.nodes.find(h);if(i==t.nodes.end()||i->second.capsuleDirty)return;i->second.capsuleDirty=true;scheduleUpdate(t);});auto weak=winrt::make_weak(root);n.watchers[L"CapsuleLayout"]=[weak,token]{try{if(auto e=weak.get())e.LayoutUpdated(token);}catch(...){}};}
-                double left=width,right=0,trayLeft=width,trayRight=0;bool joined=false;std::vector<std::pair<double,double>> auxiliary;
+                double left=width,right=0;bool joined=false;std::vector<std::pair<double,double>> auxiliary;
+                Element trayElement{nullptr};std::vector<Element> layoutIcons;
                 Element scanRoot=root;if(taskbar)for(unsigned depth=0;depth<8;++depth){auto parent=Tree::GetParent(scanRoot).try_as<Element>();if(!parent)break;scanRoot=parent;}
                 std::vector<winrt::Windows::UI::Xaml::DependencyObject> pending;if(taskbar)pending.push_back(scanRoot);
                 unsigned visited=0;while(!pending.empty()&&visited++<2048){auto object=pending.back();pending.pop_back();auto child=object.try_as<Element>();
                     if(child&&child.Visibility()!=winrt::Windows::UI::Xaml::Visibility::Visible)continue;
                     auto type=winrt::get_class_name(object);
-                    if(child&&child.Name()==L"SystemTrayFrameGrid"&&child.ActualWidth()>0)try{auto origin=child.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+child.ActualWidth());if(b>a){trayLeft=std::min(trayLeft,a);trayRight=std::max(trayRight,b);joined=true;}continue;}catch(...){}
+                    if(child&&child.Name()==L"SystemTrayFrameGrid"&&child.ActualWidth()>0)try{auto origin=child.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+child.ActualWidth());if(b>a)trayElement=child;continue;}catch(...){}
                     bool icon=type==L"Taskbar.TaskListButton"||type==L"Taskbar.TaskListLabeledButton"||type==L"Taskbar.ExperienceToggleButton"||type==L"SearchUx.SearchUI.SearchIconButton"||type==L"SearchUx.SearchUI.SearchBoxButton";
                     if(icon&&child&&child.ActualWidth()>0){auto origin=child.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+child.ActualWidth());
-                        if(b>a){if(type==L"Taskbar.TaskListButton"||type==L"Taskbar.TaskListLabeledButton"){left=std::min(left,a);right=std::max(right,b);}else if(type!=L"Taskbar.ExperienceToggleButton"||b-a<=height*2)auxiliary.emplace_back(a,b);}continue;}
+                        if(b>a){layoutIcons.push_back(child);if(type==L"Taskbar.TaskListButton"||type==L"Taskbar.TaskListLabeledButton"){left=std::min(left,a);right=std::max(right,b);}else if(type!=L"Taskbar.ExperienceToggleButton"||b-a<=height*2)auxiliary.emplace_back(a,b);}continue;}
                     int count=Tree::GetChildrenCount(object);for(int i=0;i<count;++i)pending.push_back(Tree::GetChild(object,i));}
                 // Only include controls contiguous with the task buttons. A
                 // separate Widgets button at the screen edge must not stretch
                 // the icon capsule across the whole taskbar.
                 if(right>left)for(size_t pass=0;pass<auxiliary.size();++pass){bool changed=false;for(auto span:auxiliary)if(span.first<=right+height&&span.second>=left-height){double a=std::min(left,span.first),b=std::max(right,span.second);changed=changed||a!=left||b!=right;left=a;right=b;}if(!changed)break;}
-                if(joined){left=std::min(left,trayLeft);right=std::max(right,trayRight);}
-                if(right>left)for(auto const&entry:thread().nodes){if(entry.second.surface!=glass::TaskbarRoot)continue;try{Ptr<IInspectable> value;if(entry.second.weak)entry.second.weak->Resolve(__uuidof(IInspectable),value.put());if(!value)continue;winrt::Windows::Foundation::IInspectable object{nullptr};winrt::copy_from_abi(object,value.p);auto tray=object.try_as<Element>();if(!tray||tray.Name()!=L"SystemTrayFrameGrid"||tray.ActualWidth()<=0)continue;auto origin=tray.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+tray.ActualWidth());if(b>a){left=std::min(left,a);right=std::max(right,b);joined=true;}}catch(...){}}
+                std::vector<Element> cluster;for(auto const&e:layoutIcons){auto origin=e.TransformToVisual(host).TransformPoint({0,0});if(origin.X+e.ActualWidth()>=left-.5&&origin.X<=right+.5)cluster.push_back(e);}
+                if(right>left)for(auto const&entry:thread().nodes){if(entry.second.surface!=glass::TaskbarRoot)continue;try{Ptr<IInspectable> value;if(entry.second.weak)entry.second.weak->Resolve(__uuidof(IInspectable),value.put());if(!value)continue;winrt::Windows::Foundation::IInspectable object{nullptr};winrt::copy_from_abi(object,value.p);auto tray=object.try_as<Element>();if(!tray||tray.Name()!=L"SystemTrayFrameGrid"||tray.ActualWidth()<=0)continue;auto origin=tray.TransformToVisual(host).TransformPoint({0,0});double a=std::max(0.0,(double)origin.X),b=std::min(width,(double)origin.X+tray.ActualWidth());if(b>a&&!trayElement)trayElement=tray;}catch(...){}}
+                if(!n.capsuleLayout)n.capsuleLayout=std::make_shared<liquid::CapsuleLayout>();
+                if(!n.watchers.count(L"CapsuleContent")){auto layout=n.capsuleLayout;n.watchers[L"CapsuleContent"]=[layout]{layout->stop();};}
+                auto placement=n.capsuleLayout->apply(cluster,trayElement,host);
+                if(placement.valid){left=placement.left;right=placement.right;joined=true;}
+                else{n.lastCapsule=E_NOINTERFACE;n.capsuleReported=true;report(E_NOINTERFACE,glass::Capsule);return;}
                 if(right>left){
                     double a=std::max(0.0,left-8),b=std::max(0.0,width-right-8),vertical=std::min(height/4,std::max(2.0,(height-44.0)/2)),radius=std::min(height-2*vertical,width-a-b)/2;
                     auto geometry=std::to_wstring(a)+L","+std::to_wstring(vertical)+L","+std::to_wstring(b)+L","+std::to_wstring(vertical);
                     if(n.capsuleGeometry==geometry)return;
                     bool ok=typed(n,h,L"Margin",L"Thickness",geometry);
                     ok=typed(n,h,L"RadiusX",L"Double",std::to_wstring(radius))&&ok;ok=typed(n,h,L"RadiusY",L"Double",std::to_wstring(radius))&&ok;
-                    if(ok){result=S_OK;n.capsuleGeometry=geometry;auto&t=thread();if(t.unifiedCapsule!=joined){t.unifiedCapsule=joined;scheduleUpdate(t);}}else restoreNamed(n,h,{L"Margin",L"RadiusX",L"RadiusY"});
+                    if(ok){result=S_OK;n.capsuleGeometry=geometry;auto&t=thread();if(t.unifiedCapsule!=joined){t.unifiedCapsule=joined;scheduleUpdate(t);}}else{n.capsuleLayout->stop();restoreNamed(n,h,{L"Margin",L"RadiusX",L"RadiusY"});}
                 }
             }
         }
@@ -349,7 +357,7 @@ DWORD WINAPI attachFramework(void*arg){int modern=(int)(INT_PTR)arg;CoInitialize
 extern "C" HRESULT WINAPI DllGetClassObject(REFCLSID id,REFIID iid,void**p){if(id!=glass::TapId&&id!=glass::runtimeTapId(runtimePath()))return CLASS_E_CLASSNOTAVAILABLE;auto f=new Factory;auto hr=f->QueryInterface(iid,p);f->Release();return hr;}
 extern "C" HRESULT WINAPI DllCanUnloadNow(){return S_FALSE;}
 extern "C" __declspec(dllexport) HRESULT WINAPI GlassGraphicsTest(){
-    if(!imported_glass::test())return E_FAIL;
+    if(!imported_glass::test()||!liquid::testCapsulePlacement())return E_FAIL;
     auto subscriptionTest=xaml_subscription::test();if(FAILED(subscriptionTest))return subscriptionTest;
     struct QueueOptions{DWORD size;int thread,apartment;};
     HMODULE messaging=LoadLibraryExW(L"CoreMessaging.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);if(!messaging)return HRESULT_FROM_WIN32(GetLastError());
