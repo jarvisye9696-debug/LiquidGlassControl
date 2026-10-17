@@ -7,10 +7,10 @@
 namespace imported_glass {
 struct ThemeTargetStyles{const wchar_t*target;std::vector<const wchar_t*>styles;};
 struct Theme{std::vector<ThemeTargetStyles>targets;std::vector<const wchar_t*>constants;};
-#include "third_party/windhawk/Taskbar-LiquidGlass.h"
-#include "third_party/windhawk/Start-LiquidGlass.h"
-#include "third_party/windhawk/Notifications-LiquidGlass.h"
-#include "third_party/windhawk/Explorer-LiquidGlass.h"
+#include "../third_party/windhawk/Taskbar-LiquidGlass.h"
+#include "../third_party/windhawk/Start-LiquidGlass.h"
+#include "../third_party/windhawk/Notifications-LiquidGlass.h"
+#include "../third_party/windhawk/Explorer-LiquidGlass.h"
 inline Theme const&theme(int host){return host==1?Start:host==2?Notifications:host==3?Explorer:Taskbar;}
 inline std::wstring trim(std::wstring value){auto a=value.find_first_not_of(L" \t\r\n"),b=value.find_last_not_of(L" \t\r\n");return a==value.npos?L"":value.substr(a,b-a+1);}
 inline std::wstring shortType(std::wstring value){auto i=value.find_last_of(L'.');return i==value.npos?value:value.substr(i+1);}

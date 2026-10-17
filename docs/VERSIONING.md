@@ -1,6 +1,6 @@
 # Version policy
 
-`app_version.h` is the single version source for captions, About, packaging and
+`src/app_version.h` is the single version source for captions, About, packaging and
 the release-tag check. Existing published tags are never renamed or replaced.
 
 The compact application starts at **0.12.0-beta.1**. A minor increment identifies

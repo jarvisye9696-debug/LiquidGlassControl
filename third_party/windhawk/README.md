@@ -25,4 +25,4 @@ or a full visual-state/theme-resource/private-symbol engine.
 
 The corresponding engine source and build scripts are included in the portable
 ZIP as LiquidGlass-engine-source.zip. This directory's license does not select
-a separate license for controller UI code; see the root LICENSING.md for its authorization scope.
+a separate license for controller UI code; see the docs/LICENSING.md for its authorization scope.

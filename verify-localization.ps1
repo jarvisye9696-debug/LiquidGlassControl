@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
 # Check translation coverage without launching the controller or touching settings.
 $literal = '((?:[^"\\]|\\.)*)'
-$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'app_version.h')), '(?m)^#define LG_VERSION "([^"]+)"').Groups[1].Value
+$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'src/app_version.h')), '(?m)^#define LG_VERSION "([^"]+)"').Groups[1].Value
 function Expand-UiLiterals([string]$text) { return ($text.Replace('LG_VERSION_W', 'L"' + $version + '"') -replace '"\s+L"', '') }
-$catalog = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'localization.h'))
+$catalog = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'src/localization.h'))
 $catalog = Expand-UiLiterals $catalog
 $entries = [regex]::Matches($catalog, '\{L"' + $literal + '",L"' + $literal + '",L"' + $literal + '"\}')
 $translations = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
@@ -14,7 +14,7 @@ foreach ($entry in $entries) {
     $translations.Add($english, $entry.Groups[2].Value)
 }
 $required = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-foreach ($name in @('main.cpp', 'control_ui.h', 'ui_style.h')) {
+foreach ($name in @('src/main.cpp', 'src/control_ui.h', 'src/ui_style.h')) {
     $source = [IO.File]::ReadAllText((Join-Path $PSScriptRoot $name))
     $source = Expand-UiLiterals $source
     $patterns = @(

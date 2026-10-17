@@ -1,7 +1,7 @@
 param([switch]$SkipBuild, [string]$ExecutablePath, [string]$OutputDirectory, [string]$TestExecutablePath)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'app_version.h')), '(?m)^#define LG_VERSION "([^"]+)"').Groups[1].Value
+$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'src/app_version.h')), '(?m)^#define LG_VERSION "([^"]+)"').Groups[1].Value
 if (-not $version) { throw 'Version missing from app_version.h' }
 $name = "LiquidGlassControl-$version-win11-x64"
 $dist = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'dist' }
@@ -32,12 +32,13 @@ Get-Content -LiteralPath (Join-Path $stage 'self-test.txt')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Quick Start.txt') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Create Desktop Shortcut.cmd') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'release\Third Party Notices.txt') -Destination $stage
-foreach ($notice in @('LICENSE', 'LICENSING.md', 'CODE-SIGNING.md')) {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $notice) -Destination $stage
+foreach ($notice in @('LICENSING.md', 'CODE-SIGNING.md')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot ('docs/' + $notice)) -Destination $stage
 }
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LICENSE') -Destination $stage
 # Corresponding source accompanies the GPL engine, with no local settings/logs.
 $sourceFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object { $_.Extension -in '.cpp','.h','.def','.ps1','.md','.txt' } | ForEach-Object FullName)
-$sourceFiles += @((Join-Path $PSScriptRoot 'assets'),(Join-Path $PSScriptRoot 'third_party'),(Join-Path $PSScriptRoot 'release'),(Join-Path $PSScriptRoot 'tests'))
+$sourceFiles += @((Join-Path $PSScriptRoot 'src'),(Join-Path $PSScriptRoot 'docs'),(Join-Path $PSScriptRoot 'assets'),(Join-Path $PSScriptRoot 'third_party'),(Join-Path $PSScriptRoot 'release'),(Join-Path $PSScriptRoot 'tests'))
 $sourceFiles += Join-Path $PSScriptRoot 'LICENSE'
 $sourceZip = Join-Path $stage 'LiquidGlass-engine-source.zip'
 Compress-Archive -LiteralPath $sourceFiles -DestinationPath $sourceZip -CompressionLevel Optimal

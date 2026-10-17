@@ -1,4 +1,4 @@
-#include "localization.h"
+#include "../src/localization.h"
 #include <cstdio>
 int main(){
     for(const auto&entry:l10n::catalog){

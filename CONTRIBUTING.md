@@ -1,8 +1,8 @@
 # Contributing / 参与开发
 
-The project owner's and DK's original contributions are licensed under GPL-3.0-only. See LICENSE and LICENSING.md for scope and third-party notices. The owner confirmed DK's agreement on 2026-10-16; other copyright holders must authorize any additional contributions.
+The project owner's and DK's original contributions are licensed under GPL-3.0-only. See LICENSE and docs/LICENSING.md for scope and third-party notices. The owner confirmed DK's agreement on 2026-10-16; other copyright holders must authorize any additional contributions.
 
-项目所有者与 DK 的原创贡献采用 GPL-3.0-only，范围和第三方许可证见 LICENSING.md。所有者已于 2026-10-16 确认 DK 同意；后续其他权利人的贡献仍需取得授权。新增贡献须遵守 LICENSING.md。
+项目所有者与 DK 的原创贡献采用 GPL-3.0-only，范围和第三方许可证见 docs/LICENSING.md。所有者已于 2026-10-16 确认 DK 同意；后续其他权利人的贡献仍需取得授权。新增贡献须遵守 docs/LICENSING.md。
 
 ## Work together
 
@@ -45,12 +45,12 @@ Alternatively, use `./build.ps1 -BuildTests` with MinGW clang++ (the installed W
 
 | File | Responsibility |
 |---|---|
-| `main.cpp` | Window lifecycle, settings, applying/restoring effects, self-test |
-| `control_ui.h` | Controls and five-language captions |
-| `ui_style.h` | Fonts and GDI rendering |
-| `native_osd.h`, `native_switches.h` | Native volume/brightness styles and restoration journals |
-| `shell_materials.h`, `shell_materials_test.h` | Independent shell background rules, journals and isolated registry tests |
-| `explorer_background.h` | Explorer-specific styles and restoration |
+| `src/main.cpp` | Window lifecycle, settings, applying/restoring effects, self-test |
+| `src/control_ui.h` | Controls and five-language captions |
+| `src/ui_style.h` | Fonts and GDI rendering |
+| `src/native_osd.h`, `src/native_switches.h` | Native volume/brightness styles and restoration journals |
+| `src/shell_materials.h`, `src/shell_materials_test.h` | Independent shell background rules, journals and isolated registry tests |
+| `src/explorer_background.h` | Explorer-specific styles and restoration |
 | `package.ps1`, `release/` | Clean portable distribution and user instructions |
 
 ## Validation
@@ -65,4 +65,4 @@ Alternatively, use `./build.ps1 -BuildTests` with MinGW clang++ (the installed W
 
 ## Releases
 
-See [RELEASING.md](RELEASING.md). Pull requests build/test/package on Windows. Version tags create a **draft** GitHub release; maintainers inspect its assets before publication. While this repository is private, release downloads also require access.
+See [RELEASING.md](docs/RELEASING.md). Pull requests build/test/package on Windows. Version tags create a **draft** GitHub release; maintainers inspect its assets before publication. While this repository is private, release downloads also require access.

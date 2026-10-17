@@ -24,8 +24,8 @@ Experimental, unsigned build. Notification styling is unconfirmed; capsule tray 
 <details>
 <summary>开发文档 / Development</summary>
 
-[参与开发](CONTRIBUTING.md) · [架构](ARCHITECTURE.md) · [构建发布](RELEASING.md) · [版本规则](VERSIONING.md)
+[参与开发](CONTRIBUTING.md) · [架构](docs/ARCHITECTURE.md) · [构建发布](docs/RELEASING.md) · [版本规则](docs/VERSIONING.md)
 
 </details>
 
-[GPL-3.0-only](LICENSE) · [许可范围与第三方声明](LICENSING.md) · [签名政策](CODE-SIGNING.md) · 贡献者：[DK](https://github.com/domk6966)
+[GPL-3.0-only](LICENSE) · [许可范围与第三方声明](docs/LICENSING.md) · [签名政策](docs/CODE-SIGNING.md) · 贡献者：[DK](https://github.com/domk6966)

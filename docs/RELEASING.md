@@ -3,7 +3,7 @@
 The repository and v0.9 preview downloads are public. The owner's and DK's original code uses GPL-3.0-only; see LICENSING.md for authorization scope and contributor confirmation. Imported Styler material data and the modified engine carry GPLv3; preserve the supplied licenses and corresponding engine source in portable packages. See CODE-SIGNING.md for signing status. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
-2. Update `LG_VERSION` in `app_version.h`; captions/About, packaging and CI use it. Follow VERSIONING.md and do not reuse a tag.
+2. Update `LG_VERSION` in `src/app_version.h`; captions/About, packaging and CI use it. Follow VERSIONING.md and do not reuse a tag.
 3. Build and verify on Windows 11. Test all five UI languages and live effect restoration. CI factory/unit tests do not verify live XAML styling. Complete the validation in ARCHITECTURE.md before release.
 4. Commit version changes, then push a tag matching the package version, for example `v0.9`:
 

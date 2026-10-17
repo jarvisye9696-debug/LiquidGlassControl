@@ -1,6 +1,6 @@
 # Licensing
 
-The project owner's and DK (@domk6966)'s original contributions to Liquid Glass Control are licensed under **GPL-3.0-only** (GNU General Public License, version 3 only). See [LICENSE](LICENSE) for the full license text. This grant permits use, modification and redistribution subject to that license, without warranty.
+The project owner's and DK (@domk6966)'s original contributions to Liquid Glass Control are licensed under **GPL-3.0-only** (GNU General Public License, version 3 only). See [LICENSE](../LICENSE) for the full license text. This grant permits use, modification and redistribution subject to that license, without warranty.
 
 Third-party code retains its existing copyright notices and licenses:
 

@@ -4,7 +4,7 @@
 // hooks (user-supplied source). See third_party/windhawk/README.md and COPYING.
 // Windhawk hook installation is replaced with statically linked MinHook.
 #include <windows.h>
-#include "third_party/minhook/include/MinHook.h"
+#include "../third_party/minhook/include/MinHook.h"
 namespace xaml_subscription {
 inline thread_local bool subscribing=false;
 inline decltype(&RegOpenKeyExW) originalOpen=nullptr;

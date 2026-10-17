@@ -21,7 +21,7 @@ foreach ($unit in @('buffer','hook','trampoline','hde/hde64')) {
     if ($LASTEXITCODE -ne 0) { throw 'MinHook compilation failed.' }
     $hookObjects += $object
 }
-& $Compiler --target=x86_64-w64-mingw32 -std=c++20 @engineIncludes -Os -ffunction-sections -fdata-sections -Wall -Wextra -shared -static '-Wl,--gc-sections,--strip-all' (Join-Path $PSScriptRoot 'glass_engine.cpp') (Join-Path $PSScriptRoot 'glass_engine.def') @hookObjects -o (Join-Path $outputDir 'GlassEngine.dll') -lole32 -loleaut32 -luuid -lruntimeobject -lcomctl32 -ldwmapi -ladvapi32 -ld2d1
+& $Compiler --target=x86_64-w64-mingw32 -std=c++20 @engineIncludes -Os -ffunction-sections -fdata-sections -Wall -Wextra -shared -static '-Wl,--gc-sections,--strip-all' (Join-Path $PSScriptRoot 'src/glass_engine.cpp') (Join-Path $PSScriptRoot 'src/glass_engine.def') @hookObjects -o (Join-Path $outputDir 'GlassEngine.dll') -lole32 -loleaut32 -luuid -lruntimeobject -lcomctl32 -ldwmapi -ladvapi32 -ld2d1
 if ($LASTEXITCODE -ne 0) { throw 'Engine compilation failed.' }
 $engineBytes = [IO.File]::ReadAllBytes((Join-Path $outputDir 'GlassEngine.dll'))
 $noticeBytes = [IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'release\Third Party Notices.txt'))
@@ -38,10 +38,10 @@ try {
         if ($record) { $writer.Write([byte[]]$payload); while ($writer.BaseStream.Position % 4) { $writer.Write([byte]0) } }
     }
 } finally { $writer.Dispose() }
-& $Compiler --target=x86_64-w64-mingw32 -std=c++17 -Os -ffunction-sections -fdata-sections -Wall -Wextra -municode -mwindows -static '-Wl,--gc-sections,--strip-all' (Join-Path $PSScriptRoot 'main.cpp') (Join-Path $PSScriptRoot 'assets\icon.res') (Join-Path $outputDir 'engine.res') -o (Join-Path $outputDir $OutputName) -ldwmapi -lshell32 -luser32 -lgdi32 -ladvapi32 -lole32 -lcomctl32 -luxtheme -luuid
+& $Compiler --target=x86_64-w64-mingw32 -std=c++17 -Os -ffunction-sections -fdata-sections -Wall -Wextra -municode -mwindows -static '-Wl,--gc-sections,--strip-all' (Join-Path $PSScriptRoot 'src/main.cpp') (Join-Path $PSScriptRoot 'assets\icon.res') (Join-Path $outputDir 'engine.res') -o (Join-Path $outputDir $OutputName) -ldwmapi -lshell32 -luser32 -lgdi32 -ladvapi32 -lole32 -lcomctl32 -luxtheme -luuid
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
 if ($BuildTests) {
-& $Compiler --target=x86_64-w64-mingw32 -std=c++17 -DLG_ENABLE_SELF_TEST -Os -ffunction-sections -fdata-sections -Wall -Wextra -municode -mwindows -static '-Wl,--gc-sections,--strip-all' (Join-Path $PSScriptRoot 'main.cpp') (Join-Path $PSScriptRoot 'assets\icon.res') (Join-Path $outputDir 'engine.res') -o (Join-Path $outputDir 'LiquidGlassTests.exe') -ldwmapi -lshell32 -luser32 -lgdi32 -ladvapi32 -lole32 -lcomctl32 -luxtheme -luuid
+& $Compiler --target=x86_64-w64-mingw32 -std=c++17 -DLG_ENABLE_SELF_TEST -Os -ffunction-sections -fdata-sections -Wall -Wextra -municode -mwindows -static '-Wl,--gc-sections,--strip-all' (Join-Path $PSScriptRoot 'src/main.cpp') (Join-Path $PSScriptRoot 'assets\icon.res') (Join-Path $outputDir 'engine.res') -o (Join-Path $outputDir 'LiquidGlassTests.exe') -ldwmapi -lshell32 -luser32 -lgdi32 -ladvapi32 -lole32 -lcomctl32 -luxtheme -luuid
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
 }
 Write-Host "Built: $outputDir\$OutputName"
