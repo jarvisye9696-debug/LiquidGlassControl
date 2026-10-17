@@ -46,10 +46,10 @@ const std::wstring&runtimePath(){static std::wstring path=[](){wchar_t value[327
 const std::wstring&threadClass(){static auto name=glass::threadClassName(runtimePath());return name;}
 class Session;SRWLOCK sessionsLock=SRWLOCK_INIT;std::vector<Session*> sessions;
 // Ok: consistent config. Transient: the controller is mid-publish or the read tore; keep current surfaces and retry. Invalid: no usable config.
-enum class Read {Ok,Transient,Invalid};
+using Read=glass::ReadState;
 Read snapshot(glass::Config&c){
     AcquireSRWLockShared(&configLock);Read result=Read::Invalid;
-    if(shared){result=Read::Transient;for(int i=0;i<16;++i){LONG s=shared->sequence;if(s&1){YieldProcessor();continue;}MemoryBarrier();c=*shared;MemoryBarrier();if(s==shared->sequence){result=c.magic==glass::Magic&&c.version==glass::Version?Read::Ok:Read::Invalid;break;}}}
+    if(shared)result=glass::readSnapshot(shared,c);
     // The controller exited: all effects must be restored regardless of what the mapping still holds.
     if(ownerHandle&&WaitForSingleObject(ownerHandle,0)==WAIT_OBJECT_0){c.features=0;result=Read::Ok;}
     ReleaseSRWLockShared(&configLock);return result;

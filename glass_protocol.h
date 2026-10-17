@@ -18,6 +18,24 @@ struct Config {
 };
 inline std::wstring mappingName(DWORD owner){return L"Local\\LiquidGlass.Engine.Config.v2."+std::to_wstring(owner);}
 inline DWORD bounded(DWORD n,DWORD lo,DWORD hi){return n<lo?lo:n>hi?hi:n;}
+// Seqlock reader for the config the controller publishes. The writer keeps the sequence odd while publishing. Ok: consistent copy. Transient: still publishing or torn after the bounded attempts. Invalid: consistent copy with a foreign header.
+enum class ReadState {Ok,Transient,Invalid};
+inline ReadState readSnapshot(volatile Config*shared,Config&c,int attempts=16){
+    for(int i=0;i<attempts;++i){
+        LONG s=shared->sequence;if(s&1){YieldProcessor();continue;}
+        // Copy field by field: a volatile source cannot be assigned to a plain Config.
+        Config copy{};MemoryBarrier();copy.magic=shared->magic;copy.version=shared->version;copy.owner=shared->owner;copy.features=shared->features;copy.opacity=shared->opacity;copy.radius=shared->radius;copy.tint=shared->tint;copy.blur=shared->blur;copy.economy=shared->economy;MemoryBarrier();
+        if(s==shared->sequence){c=copy;return c.magic==Magic&&c.version==Version?ReadState::Ok:ReadState::Invalid;}
+    }
+    return ReadState::Transient;
+}
+// Regression check for the reader above, run by --self-test: a consistent config is accepted, a writer that never finishes is Transient (bounded), and a foreign header is Invalid.
+inline bool selfTestSnapshot(){
+    Config source;source.features=Taskbar|Dock;source.blur=20;Config out;
+    if(readSnapshot((volatile Config*)&source,out)!=ReadState::Ok||out.features!=(Taskbar|Dock)||out.blur!=20)return false;
+    source.sequence=1;if(readSnapshot((volatile Config*)&source,out,4)!=ReadState::Transient)return false;
+    source.sequence=0;source.magic=0;return readSnapshot((volatile Config*)&source,out)==ReadState::Invalid;
+}
 inline Config normalize(Config c){c.features&=127;c.blur=bounded(c.blur,0,40);c.opacity=bounded(c.opacity,5,90);c.radius=bounded(c.radius,0,28);c.tint=bounded(c.tint,0,2);return c;}
 // Names only identify material surfaces. No width, height, padding, alignment,
 // taskbar position or system work-area property is ever written by this engine.
