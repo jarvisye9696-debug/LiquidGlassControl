@@ -16,9 +16,8 @@ class Controller {
         if(_wcsicmp(exe.c_str(),L"explorer.exe")==0){if((f&(Volume|Brightness|Taskbar|Dock|Capsule))&&(wcscmp(cls,L"Shell_TrayWnd")==0||wcscmp(cls,L"Shell_SecondaryTrayWnd")==0||wcscmp(cls,L"XamlExplorerHostIslandWindow")==0))return true;return (f&Explorer)&&(wcscmp(cls,L"CabinetWClass")==0||wcscmp(cls,L"ExploreWClass")==0);}
         return ((f&Start)&&_wcsicmp(exe.c_str(),L"StartMenuExperienceHost.exe")==0)||((f&Notifications)&&(_wcsicmp(exe.c_str(),L"ShellExperienceHost.exe")==0||_wcsicmp(exe.c_str(),L"ShellHost.exe")==0));
     }
-    void attachWindow(HWND h){DWORD tid=GetWindowThreadProcessId(h,nullptr);if(!tid||threads.count(tid))return;auto installed=SetWindowsHookExW(WH_CALLWNDPROC,hook,module,tid);if(!installed){failed=true;trace("hook error",GetLastError());return;}
-        DWORD_PTR answer=0;if(SendMessageTimeoutW(h,attach,GetCurrentProcessId(),0,SMTO_ABORTIFHUNG|SMTO_BLOCK,300,&answer))threads.insert(tid);else failed=true;UnhookWindowsHookEx(installed);
-    }
+    // Queue attachment through WH_GETMESSAGE; never wait for a host window on the UI thread.
+    void attachWindow(HWND h){DWORD tid=GetWindowThreadProcessId(h,nullptr);if(tid)attachThread(tid);}
     static BOOL CALLBACK child(HWND h,LPARAM param){auto self=(Controller*)param;wchar_t name[128]{};GetClassNameW(h,name,128);if(wcsstr(name,L"Xaml")||wcsstr(name,L"DesktopWindow"))self->attachWindow(h);return TRUE;}
     static BOOL CALLBACK window(HWND h,LPARAM param){auto self=(Controller*)param;if(self->target(h)){self->attachWindow(h);EnumChildWindows(h,child,param);}return TRUE;}
     static BOOL CALLBACK threadWindow(HWND h,LPARAM param){auto self=(Controller*)param;self->attachWindow(h);return TRUE;}

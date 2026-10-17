@@ -25,9 +25,17 @@ void pollMigration(){
     message(tr(L"旧版主题已还原，任务栏使用系统原有布局。",L"Previous theme restored. Taskbar uses the original system layout."));
     if(exitAfterRestore)DestroyWindow(mainWindow);
 }
+inline DWORD desiredGlassFeatures(){return (volumeOn?glass::Volume:0)|(brightnessOn?glass::Brightness:0)|(shellOn[0]?(glass::Taskbar|glass::Capsule):0)|(shellOn[1]?glass::Start:0)|(shellOn[2]?glass::Notifications:0)|(explorerOn?glass::Explorer:0)|(dockOn?glass::Dock:0);}
+void queueGlass(bool discover){
+    glassConfig.features=desiredGlassFeatures();confirmedMaterials&=glassConfig.features;failedMaterials&=glassConfig.features;fallbackMaterials&=glassConfig.features;
+    glassPendingDiscover=glassPendingDiscover||discover;updateNativeInfo();
+    // Short bursts share one connection pass; disabling everything restores immediately.
+    if(!glassConfig.features||!SetTimer(mainWindow,14,180,nullptr)){bool pending=glassPendingDiscover;applyGlass(pending);}
+}
 void applyGlass(bool discover){
+    KillTimer(mainWindow,14);glassPendingDiscover=false;
     if(!engineReady||migrationJob||migrationNeeded()){updateNativeInfo();return;}
-    glassConfig.features=(volumeOn?glass::Volume:0)|(brightnessOn?glass::Brightness:0)|(shellOn[0]?(glass::Taskbar|glass::Capsule):0)|(shellOn[1]?glass::Start:0)|(shellOn[2]?glass::Notifications:0)|(explorerOn?glass::Explorer:0)|(dockOn?glass::Dock:0);
+    glassConfig.features=desiredGlassFeatures();
     fallbackMaterials&=glassConfig.features;confirmedMaterials&=glassConfig.features;failedMaterials=0;KillTimer(mainWindow,6);
     // A rediscovery re-enumerates shell windows, so earlier success reports may describe surfaces that no longer exist (restarted Explorer, closed flyouts). Clear them until the engine reports again.
     if(discover)confirmedMaterials=fallbackMaterials=0;
