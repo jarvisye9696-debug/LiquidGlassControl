@@ -41,6 +41,7 @@ void createFonts(){
 void destroyFonts(){if(font)DeleteObject(font);if(headingFont)DeleteObject(headingFont);if(actionFont)DeleteObject(actionFont);if(cardBrush)DeleteObject(cardBrush);font=headingFont=actionFont=nullptr;cardBrush=nullptr;}
 // Shared motion for every Liquid Glass control. Each channel eases toward its target using elapsed time (exponential approach, about 200 ms to settle, no overshoot). A control owns a timer only while one of its channels is still moving; the timer stops when all channels settle, the page hides the control, or the control is destroyed.
 #include <cmath>
+#include <algorithm>
 enum MotionChannel {kCheck=0,kPress=1,kHover=2,kSelect=3};
 const UINT_PTR kMotionTimer=0x5A1;
 // Each channel moves from the value it had when its target changed, over its own duration, with an ease-in-out curve. Progress is measured from real time, so the motion does not depend on frame rate.
@@ -145,18 +146,30 @@ bool drawModernControl(DRAWITEMSTRUCT* item){
     if(!tab){if(item->CtlID==VolumeOn)primary=volumeOn;if(item->CtlID==VolumeOff)primary=!volumeOn;if(item->CtlID==BrightnessOn)primary=brightnessOn;if(item->CtlID==BrightnessOff)primary=!brightnessOn;}
     bool disabled=(item->itemState&ODS_DISABLED)!=0,pressed=(item->itemState&ODS_SELECTED)!=0;
     Motion*mo=motionOf(item->hwndItem);mo->painted=true;float hoverAmount=disabled?0.f:mo->v[kHover],pressAmount=disabled?0.f:mo->v[kPress];
-    if(tab&&primary){
-        // The selected tab fades its background in when the selection changes; the first paint shows the final state.
+    // Tabs share one sliding indicator: it moves from the previously selected tab to the new one, and each tab takes the share of the indicator that overlaps it.
+    float tabCover=0.f;
+    if(tab){
+        int selected=item->hwndItem==settingsTabs?settingsPage:currentPage;
         int last=(int)(INT_PTR)GetPropW(item->hwndItem,L"LG.Sel")-1;
-        if(last!=(int)item->itemID){SetPropW(item->hwndItem,L"LG.Sel",(HANDLE)(INT_PTR)(item->itemID+1));if(last<0)mo->v[kSelect]=mo->t[kSelect]=1.f;else{mo->v[kSelect]=0.f;mo->t[kSelect]=0.f;setMotion(item->hwndItem,kSelect,1.f);}}
+        if(last!=selected){
+            SetPropW(item->hwndItem,L"LG.Sel",(HANDLE)(INT_PTR)(selected+1));
+            SetPropW(item->hwndItem,L"LG.SelFrom",(HANDLE)(INT_PTR)(last+1));
+            if(last<0)mo->v[kSelect]=mo->t[kSelect]=1.f;else{mo->v[kSelect]=0.f;mo->t[kSelect]=0.f;setMotion(item->hwndItem,kSelect,1.f);}
+        }
+        int from=(int)(INT_PTR)GetPropW(item->hwndItem,L"LG.SelFrom")-1;
+        RECT to{},source{};TabCtrl_GetItemRect(item->hwndItem,selected,&to);RECT indicator=to;
+        if(from>=0&&from!=selected&&mo->v[kSelect]<1.f){TabCtrl_GetItemRect(item->hwndItem,from,&source);float p=mo->v[kSelect];indicator.left=(int)(source.left+(to.left-source.left)*p+0.5f);indicator.right=(int)(source.right+(to.right-source.right)*p+0.5f);}
+        int left=std::max(item->rcItem.left,indicator.left),right=std::min(item->rcItem.right,indicator.right);int width=item->rcItem.right-item->rcItem.left;
+        tabCover=width>0?(float)std::max(0,right-left)/(float)width:0.f;
     }
     HBRUSH base=CreateSolidBrush(tab?tint(palette().accent,18):cardColor());FillRect(dc,&r,base);DeleteObject(base);InflateRect(&r,-2,-2);
     COLORREF fill=primary?palette().accent:palette().surface,edge=primary?palette().accent:palette().edge;
-    if(tab&&primary&&!disabled)fill=mix(palette().surface,palette().accent,mo->v[kSelect]);
+    if(tab&&!disabled)fill=mix(palette().surface,palette().accent,tabCover);
+    if(tab)edge=fill;
     if(!tab&&!disabled){COLORREF hot=primary?palette().hover:palette().selection,hotEdge=primary?hot:palette().accent;fill=mix(fill,hot,hoverAmount);edge=mix(edge,hotEdge,hoverAmount);}
     if(!tab&&!disabled&&(pressed||pressAmount>0.f))fill=mix(fill,primary?palette().pressed:palette().selection,pressed?1.f:pressAmount);
     if(disabled)fill=edge=RGB(239,241,245);
-    roundFill(dc,r,fill,edge,MulDiv(14,dpi,96));SetBkMode(dc,TRANSPARENT);SetTextColor(dc,disabled?RGB(153,164,180):primary?RGB(255,255,255):textColor());SelectObject(dc,actionFont?actionFont:font);
+    roundFill(dc,r,fill,edge,MulDiv(14,dpi,96));SetBkMode(dc,TRANSPARENT);SetTextColor(dc,disabled?RGB(153,164,180):(tab?tabCover>0.5f:primary)?RGB(255,255,255):textColor());SelectObject(dc,actionFont?actionFont:font);
     wchar_t text[256]{};if(tab){TCITEMW entry{};entry.mask=TCIF_TEXT;entry.pszText=text;entry.cchTextMax=256;TabCtrl_GetItem(item->hwndItem,(int)item->itemID,&entry);}else GetWindowTextW(item->hwndItem,text,256);
     if(!tab&&pressAmount>0.f)OffsetRect(&r,0,(int)(pressAmount*MulDiv(1,dpi,96)+0.5f));else if(pressed&&!tab)OffsetRect(&r,0,1);DrawTextW(dc,text,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);
     if((item->itemState&ODS_FOCUS)&&!tab){InflateRect(&r,-5,-5);DrawFocusRect(dc,&r);}RestoreDC(dc,saved);return true;
