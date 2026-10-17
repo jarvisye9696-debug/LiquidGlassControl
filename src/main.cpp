@@ -45,7 +45,7 @@ HWND mainWindow{}, language{}, scope{}, material{}, corners{}, list{}, status{},
 HFONT font{}; HBRUSH background{}; NOTIFYICONDATAW tray{};
 bool enabled=false,busy=false; UINT dpi=96;
 std::map<HWND,RECT> controlLayout;
-HWINEVENTHOOK windowEvents{};unsigned attributeWrites=0;
+HWINEVENTHOOK windowEvents{};unsigned attributeWrites=0;std::set<HWND> pendingWindows;bool windowScanPending=false;
 bool volumeOn=false,brightnessOn=false,startupAnimation=true,startupPlayed=false;ULONGLONG startupTime=0;RECT startupRect{};
 HWND settingsTabs{};int settingsPage=0,buildingSettings=-1;std::vector<HWND> settingsControls[3];std::map<std::wstring,HICON> appIcons;
 glass::Controller engine;glass::Config glassConfig;bool explorerOn=false,dockOn=false,capsuleOn=false,autoHideOn=false,batteryFriendly=true;taskbar_hide::Controller autoHide;HANDLE migrationJob{};HPOWERNOTIFY powerNotification{},acNotification{};bool engineReady=false;
@@ -93,15 +93,19 @@ void updateNativeInfo(){
     SendMessageW(GetDlgItem(mainWindow,AutoHideToggle),BM_SETCHECK,autoHideOn?BST_CHECKED:BST_UNCHECKED,0);
     for(int id:{TaskbarHint,StartHint,NotificationHint})SetWindowTextW(GetDlgItem(mainWindow,id),L"");
 }
-bool shellClass(const std::wstring& c){return c==L"Shell_TrayWnd"||c==L"Shell_SecondaryTrayWnd"||c==L"Progman"||c==L"WorkerW"||c==L"XamlExplorerHostIslandWindow";}
+bool shellClass(const std::wstring& c){return c==L"Shell_TrayWnd"||c==L"Shell_SecondaryTrayWnd"||c==L"Progman"||c==L"WorkerW"||c==L"XamlExplorerHostIslandWindow"||c==L"MultitaskingViewFrame"||c==L"TaskSwitcherWnd";}
 bool valid(HWND h,const Snapshot& s){DWORD pid=0;GetWindowThreadProcessId(h,&pid);return IsWindow(h)&&pid==s.pid&&classOf(h)==s.cls&&GetPropW(h,L"LiquidGlass.Control.Owner")==mainWindow;}
 void saveLanguage(){l10n::save(iniPath);}
-void setRulesActive(bool active){enabled=active;if(!active)KillTimer(mainWindow,3);observeWindows();}
+void setRulesActive(bool active){enabled=active;observeWindows();}
 void CALLBACK windowChanged(HWINEVENTHOOK,DWORD,HWND h,LONG object,LONG child,DWORD,DWORD){
     if((!enabled&&!glassConfig.features)||!h||object!=OBJID_WINDOW||child!=CHILDID_SELF||!IsWindowVisible(h)||GetAncestor(h,GA_ROOT)!=h)return;
-    DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid!=GetCurrentProcessId())SetTimer(mainWindow,3,180,nullptr);
+    DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid==GetCurrentProcessId())return;
+    // Only queue relevant shell hosts; app-only updates do not rediscover or reinject every shell thread.
+    if(!enabled&&!engine.wantsWindow(h))return;
+    if(pendingWindows.size()<128)pendingWindows.insert(h);
+    if(!windowScanPending)windowScanPending=SetTimer(mainWindow,3,180,nullptr)!=0;
 }
-void observeWindows(){bool need=enabled||glassConfig.features;if(need&&!windowEvents)windowEvents=SetWinEventHook(EVENT_OBJECT_CREATE,EVENT_OBJECT_SHOW,nullptr,windowChanged,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);else if(!need&&windowEvents){UnhookWinEvent(windowEvents);windowEvents=nullptr;KillTimer(mainWindow,3);}}
+void observeWindows(){bool need=enabled||glassConfig.features;if(need&&!windowEvents)windowEvents=SetWinEventHook(EVENT_OBJECT_CREATE,EVENT_OBJECT_SHOW,nullptr,windowChanged,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);else if(!need&&windowEvents){UnhookWinEvent(windowEvents);windowEvents=nullptr;KillTimer(mainWindow,3);windowScanPending=false;pendingWindows.clear();}}
 void selectPage(int page){
     if(page<0||page>2)return;bool changed=currentPage!=page;finishPageMotion();currentPage=page;
     SendMessageW(mainWindow,WM_SETREDRAW,FALSE,0);
@@ -215,7 +219,7 @@ void combo(HWND h,std::initializer_list<const wchar_t*> labels,int sel){SendMess
 #include "glass_features.h"
 #ifdef LG_ENABLE_SELF_TEST
 int selfTest(){
-    bool passed=FindResourceW(nullptr,MAKEINTRESOURCEW(202),RT_RCDATA)!=nullptr;HRESULT graphicsResult=E_FAIL;
+    bool passed=FindResourceW(nullptr,MAKEINTRESOURCEW(202),RT_RCDATA)!=nullptr;passed=passed&&shellClass(L"MultitaskingViewFrame")&&shellClass(L"TaskSwitcherWnd")&&!shellClass(L"CabinetWClass");HRESULT graphicsResult=E_FAIL;
     // Exercise the embedded engine and its COM factory without attaching to
     // Explorer or changing any live shell material. CI needs no Windhawk.
     auto testDir=settingsDir()+L"engine-test-"+std::to_wstring(GetCurrentProcessId())+L"\\";
@@ -340,7 +344,7 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
     case WM_POWERBROADCAST:if(w==PBT_POWERSETTINGCHANGE||w==PBT_APMPOWERSTATUSCHANGE){refreshUiPreferences();applyGlass(false);}return TRUE;
     // A manual change to the taskbar's auto-hide setting is re-checked here. The timer coalesces broadcasts; our own writes find the state unchanged and do not write again.
     case WM_SETTINGCHANGE:case WM_THEMECHANGED:case WM_SYSCOLORCHANGE:refreshUiPreferences();applyColorTheme(colorTheme,false);if(engineReady)applyGlass(false);if(autoHideOn)SetTimer(h,7,150,nullptr);break;
-    case WM_TIMER:if(w==12){tickColorTheme();}else if(w==13){tickPageMotion();}else if(w==7){KillTimer(h,7);if(!autoHide.update()){autoHideOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());updateNativeInfo();message(tr(L"自动隐藏已停止，请检查任务栏设置。",L"Auto-hide stopped; check taskbar settings."));}}else if(w==4){float t=std::min(1.f,(GetTickCount64()-startupTime)/180.f),ease=1-powf(1-t,3);SetLayeredWindowAttributes(h,0,(BYTE)(255*ease),LWA_ALPHA);SetWindowPos(h,nullptr,startupRect.left,startupRect.top+(int)((1-ease)*MulDiv(12,dpi,96)),0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);if(t>=1){KillTimer(h,4);SetWindowLongPtrW(h,GWL_EXSTYLE,GetWindowLongPtrW(h,GWL_EXSTYLE)&~WS_EX_LAYERED);RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);}}else if(w==3){KillTimer(h,3);sync(false);if(glassConfig.features)engine.discover();}else if(w==2)pollMigration();else if(w==5){KillTimer(h,5);engine.expireHooks(true);}else if(w==6){KillTimer(h,6);failedMaterials|=glassConfig.features&~pausedFeatures&~confirmedMaterials;updateNativeInfo();if(failedMaterials)message(tr(L"部分区域尚未连接，已标记为未生效；打开对应区域后可重试。",L"Some surfaces are not connected and are marked Not applied; open them and retry."));}return 0;
+    case WM_TIMER:if(w==12){tickColorTheme();}else if(w==13){tickPageMotion();}else if(w==7){KillTimer(h,7);if(!autoHide.update()){autoHideOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());updateNativeInfo();message(tr(L"自动隐藏已停止，请检查任务栏设置。",L"Auto-hide stopped; check taskbar settings."));}}else if(w==4){float t=std::min(1.f,(GetTickCount64()-startupTime)/180.f),ease=1-powf(1-t,3);SetLayeredWindowAttributes(h,0,(BYTE)(255*ease),LWA_ALPHA);SetWindowPos(h,nullptr,startupRect.left,startupRect.top+(int)((1-ease)*MulDiv(12,dpi,96)),0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);if(t>=1){KillTimer(h,4);SetWindowLongPtrW(h,GWL_EXSTYLE,GetWindowLongPtrW(h,GWL_EXSTYLE)&~WS_EX_LAYERED);RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);}}else if(w==3){KillTimer(h,3);windowScanPending=false;auto windows=std::move(pendingWindows);pendingWindows.clear();sync(false);if(glassConfig.features)for(auto window:windows)if(IsWindow(window))engine.discoverWindow(window);}else if(w==2)pollMigration();else if(w==5){KillTimer(h,5);engine.expireHooks(true);}else if(w==6){KillTimer(h,6);failedMaterials|=glassConfig.features&~pausedFeatures&~confirmedMaterials;updateNativeInfo();if(failedMaterials)message(tr(L"部分区域尚未连接，已标记为未生效；打开对应区域后可重试。",L"Some surfaces are not connected and are marked Not applied; open them and retry."));}return 0;
     case WM_APP+1:if(LOWORD(l)==WM_CONTEXTMENU)menu();else if(LOWORD(l)==NIN_SELECT||LOWORD(l)==NIN_KEYSELECT)show();return 0;
     case WM_APP+2:show();return 0;
     case WM_APP+3:if(migrationJob)return 0;setRulesActive(false);restoreWindows();if(!originals.empty()){show();return 0;}if(!autoHide.disable()){show();return 0;}autoHideOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());engine.shutdown();DestroyWindow(h);return 0;

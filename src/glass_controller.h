@@ -11,7 +11,7 @@ class Controller {
     std::set<DWORD> attemptedThreads;unsigned packagedRounds=0;
     std::wstring dllPath,windowClass;bool failed=false;DWORD loadError=0;
     void trace(const char*stage,DWORD value){if(strcmp(stage,"packaged shell processes")==0)return;auto at=dllPath.find_last_of(L"\\");auto file=dllPath.substr(0,at+1)+L"glass-controller.log";HANDLE h=CreateFileW(file.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,0,nullptr);if(h!=INVALID_HANDLE_VALUE){char line[120]{};int n=snprintf(line,sizeof(line),"%s: %lu\r\n",stage,(unsigned long)value);DWORD written=0;WriteFile(h,line,n,&written,nullptr);CloseHandle(h);}}
-    std::wstring process(DWORD id){auto found=processes.find(id);if(found!=processes.end())return found->second;wchar_t path[32768]{};DWORD size=32768;HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,id);if(p){QueryFullProcessImageNameW(p,0,path,&size);CloseHandle(p);}std::wstring value=path;auto at=value.find_last_of(L"\\");if(at!=std::wstring::npos)value.erase(0,at+1);return processes[id]=value;}
+    std::wstring process(DWORD id){auto found=processes.find(id);if(found!=processes.end())return found->second;if(processes.size()>=128)processes.clear();wchar_t path[32768]{};DWORD size=32768;HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,id);if(p){QueryFullProcessImageNameW(p,0,path,&size);CloseHandle(p);}std::wstring value=path;auto at=value.find_last_of(L"\\");if(at!=std::wstring::npos)value.erase(0,at+1);return processes[id]=value;}
     bool target(HWND h){DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid==GetCurrentProcessId())return false;auto exe=process(pid);wchar_t cls[128]{};GetClassNameW(h,cls,128);DWORD f=data?data->features:0;
         if(_wcsicmp(exe.c_str(),L"explorer.exe")==0){if((f&(Volume|Brightness|Taskbar|Dock|Capsule))&&(wcscmp(cls,L"Shell_TrayWnd")==0||wcscmp(cls,L"Shell_SecondaryTrayWnd")==0||wcscmp(cls,L"XamlExplorerHostIslandWindow")==0))return true;return (f&Explorer)&&(wcscmp(cls,L"CabinetWClass")==0||wcscmp(cls,L"ExploreWClass")==0);}
         return ((f&Start)&&_wcsicmp(exe.c_str(),L"StartMenuExperienceHost.exe")==0)||((f&Notifications)&&(_wcsicmp(exe.c_str(),L"ShellExperienceHost.exe")==0||_wcsicmp(exe.c_str(),L"ShellHost.exe")==0));
@@ -63,9 +63,12 @@ public:
     HRESULT connectTest(){using Test=HRESULT(WINAPI*)();auto test=module?(Test)GetProcAddress(module,"GlassConnectTest"):nullptr;return test?test():E_NOINTERFACE;}
     HRESULT graphicsTest(){using Test=HRESULT(WINAPI*)();auto test=module?(Test)GetProcAddress(module,"GlassGraphicsTest"):nullptr;return test?test():E_NOINTERFACE;}
     void publish(Config c){if(!data)return;c=normalize(c);c.owner=GetCurrentProcessId();InterlockedIncrement(&data->sequence);MemoryBarrier();data->features=c.features;data->opacity=c.opacity;data->radius=c.radius;data->tint=c.tint;data->blur=c.blur;data->economy=c.economy;MemoryBarrier();InterlockedIncrement(&data->sequence);}
-    void broadcast(){if(!data)return;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr))){DWORD_PTR value=0;SendMessageTimeoutW(h,refresh,0,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,200,&value);}}
+    // Ordinary updates never synchronously block the controller on shell threads. Shutdown still waits for restoration.
+    void broadcast(bool wait=false){if(!data)return;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr))){if(wait){DWORD_PTR value=0;SendMessageTimeoutW(h,refresh,0,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,200,&value);}else PostMessageW(h,refresh,0,0);}}
     bool discover(){if(!data)return false;failed=false;threads.clear();processes.clear();attemptedThreads.clear();packagedRounds=0;if(data->features){EnumWindows(window,reinterpret_cast<LPARAM>(this));discoverPackagedShell();}broadcast();return !failed;}
+    bool wantsWindow(HWND h){return data&&data->features&&target(h);}
+    void discoverWindow(HWND h){if(!wantsWindow(h))return;attachWindow(h);EnumChildWindows(h,child,reinterpret_cast<LPARAM>(this));}
     unsigned sessions()const{unsigned count=0;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr)))++count;return count;}
-    void shutdown(){expireHooks();if(data){Config c=*data;c.features=0;publish(c);broadcast();UnmapViewOfFile(data);data=nullptr;}if(mapping){CloseHandle(mapping);mapping=nullptr;}if(module){FreeLibrary(module);module=nullptr;}threads.clear();processes.clear();}
+    void shutdown(){expireHooks();if(data){Config c=*data;c.features=0;publish(c);broadcast(true);UnmapViewOfFile(data);data=nullptr;}if(mapping){CloseHandle(mapping);mapping=nullptr;}if(module){FreeLibrary(module);module=nullptr;}threads.clear();processes.clear();}
 };
 }
