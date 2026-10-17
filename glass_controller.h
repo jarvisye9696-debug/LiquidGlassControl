@@ -8,7 +8,7 @@ namespace glass {
 class Controller {
     HANDLE mapping{};Config*data{};HMODULE module{};HOOKPROC hook{},messageHook{};UINT attach{},refresh{};std::map<DWORD,HHOOK> pendingHooks;
     std::set<DWORD> threads;std::map<DWORD,std::wstring> processes;
-    std::wstring dllPath;bool failed=false;
+    std::wstring dllPath,windowClass;bool failed=false;DWORD loadError=0;
     void trace(const char*stage,DWORD value){if(strcmp(stage,"packaged shell processes")==0)return;auto at=dllPath.find_last_of(L"\\");auto file=dllPath.substr(0,at+1)+L"glass-controller.log";HANDLE h=CreateFileW(file.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,0,nullptr);if(h!=INVALID_HANDLE_VALUE){char line[120]{};int n=snprintf(line,sizeof(line),"%s: %lu\r\n",stage,(unsigned long)value);DWORD written=0;WriteFile(h,line,n,&written,nullptr);CloseHandle(h);}}
     std::wstring process(DWORD id){auto found=processes.find(id);if(found!=processes.end())return found->second;wchar_t path[32768]{};DWORD size=32768;HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,id);if(p){QueryFullProcessImageNameW(p,0,path,&size);CloseHandle(p);}std::wstring value=path;auto at=value.find_last_of(L"\\");if(at!=std::wstring::npos)value.erase(0,at+1);return processes[id]=value;}
     bool target(HWND h){DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid==GetCurrentProcessId())return false;auto exe=process(pid);wchar_t cls[128]{};GetClassNameW(h,cls,128);DWORD f=data?data->features:0;
@@ -33,12 +33,16 @@ public:
         // allows an old shell session to release its DLL naturally on sign-out.
         auto resource=FindResourceW(nullptr,MAKEINTRESOURCEW(201),RT_RCDATA);if(!resource)return false;DWORD size=SizeofResource(nullptr,resource);auto bytes=LockResource(LoadResource(nullptr,resource));
         unsigned long long hash=14695981039346656037ull;for(DWORD i=0;i<size;++i){hash^=((const BYTE*)bytes)[i];hash*=1099511628211ull;}dllPath=dir+L"LiquidGlass.Engine-"+std::to_wstring(hash)+L".dll";
-        bool identical=false;HANDLE existing=CreateFileW(dllPath.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);if(existing!=INVALID_HANDLE_VALUE){LARGE_INTEGER length{};GetFileSizeEx(existing,&length);if(length.QuadPart==size){std::vector<BYTE> content(size);DWORD n=0;if(ReadFile(existing,content.data(),size,&n,nullptr)&&n==size)identical=memcmp(content.data(),bytes,size)==0;}CloseHandle(existing);}
+        windowClass=threadClassName(dllPath);bool identical=false;HANDLE existing=CreateFileW(dllPath.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);if(existing!=INVALID_HANDLE_VALUE){LARGE_INTEGER length{};GetFileSizeEx(existing,&length);if(length.QuadPart==size){std::vector<BYTE> content(size);DWORD n=0;if(ReadFile(existing,content.data(),size,&n,nullptr)&&n==size)identical=memcmp(content.data(),bytes,size)==0;}CloseHandle(existing);}
         if(!identical){HANDLE file=CreateFileW(dllPath.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return false;DWORD n=0;BOOL ok=WriteFile(file,bytes,size,&n,nullptr);CloseHandle(file);if(!ok||n!=size)return false;}
-        module=LoadLibraryExW(dllPath.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);if(!module){trace("engine load error",GetLastError());return false;}hook=(HOOKPROC)GetProcAddress(module,"GlassHook");messageHook=(HOOKPROC)GetProcAddress(module,"GlassMessageHook");if(!hook||!messageHook){trace("engine export error",GetLastError());return false;}
+        DWORD previousMode=0;BOOL changedMode=SetThreadErrorMode(SEM_FAILCRITICALERRORS|SEM_NOOPENFILEERRORBOX,&previousMode);
+        module=LoadLibraryExW(dllPath.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);loadError=module?0:GetLastError();
+        if(changedMode)SetThreadErrorMode(previousMode,nullptr);
+        if(!module){trace("engine load error",loadError);return false;}hook=(HOOKPROC)GetProcAddress(module,"GlassHook");messageHook=(HOOKPROC)GetProcAddress(module,"GlassMessageHook");if(!hook||!messageHook){trace("engine export error",GetLastError());return false;}
         auto name=mappingName(GetCurrentProcessId());mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(Config),name.c_str());if(!mapping)return false;data=(Config*)MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Config));if(!data)return false;Config initial;initial.owner=GetCurrentProcessId();*data=initial;attach=RegisterWindowMessageW(AttachMessage);refresh=RegisterWindowMessageW(RefreshMessage);return true;
     }
     bool available()const{return data&&hook;}
+    bool policyBlocked()const{return loadError==4551||loadError==577||loadError==1260;}
     void acknowledge(DWORD tid){auto i=pendingHooks.find(tid);if(i!=pendingHooks.end()){UnhookWindowsHookEx(i->second);pendingHooks.erase(i);threads.insert(tid);}}
     void expireHooks(){for(auto&i:pendingHooks)UnhookWindowsHookEx(i.second);pendingHooks.clear();}
     const std::wstring&runtimePath()const{return dllPath;}
@@ -46,15 +50,15 @@ public:
         using GetFactory=HRESULT(WINAPI*)(REFCLSID,REFIID,void**);
         auto get=module?(GetFactory)GetProcAddress(module,"DllGetClassObject"):nullptr;if(!get)return false;
         IClassFactory*f=nullptr;IObjectWithSite*s=nullptr;
-        HRESULT hr=get(TapId,IID_IClassFactory,reinterpret_cast<void**>(&f));if(FAILED(hr)||!f)return false;
+        HRESULT hr=get(runtimeTapId(dllPath),IID_IClassFactory,reinterpret_cast<void**>(&f));if(FAILED(hr)||!f)return false;
         hr=f->CreateInstance(nullptr,IID_IObjectWithSite,reinterpret_cast<void**>(&s));f->Release();if(FAILED(hr)||!s)return false;
         IUnknown*site=nullptr;bool ok=s->GetSite(IID_IUnknown,reinterpret_cast<void**>(&site))==E_FAIL;if(site)site->Release();s->Release();return ok;
     }
     HRESULT graphicsTest(){using Test=HRESULT(WINAPI*)();auto test=module?(Test)GetProcAddress(module,"GlassGraphicsTest"):nullptr;return test?test():E_NOINTERFACE;}
     void publish(Config c){if(!data)return;c=normalize(c);c.owner=GetCurrentProcessId();InterlockedIncrement(&data->sequence);MemoryBarrier();data->features=c.features;data->opacity=c.opacity;data->radius=c.radius;data->tint=c.tint;data->blur=c.blur;data->economy=c.economy;MemoryBarrier();InterlockedIncrement(&data->sequence);}
-    void broadcast(){if(!data)return;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,ThreadClass,nullptr))){DWORD_PTR value=0;SendMessageTimeoutW(h,refresh,0,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,200,&value);}}
+    void broadcast(){if(!data)return;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr))){DWORD_PTR value=0;SendMessageTimeoutW(h,refresh,0,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,200,&value);}}
     bool discover(){if(!data)return false;failed=false;threads.clear();processes.clear();if(data->features){EnumWindows(window,reinterpret_cast<LPARAM>(this));discoverPackagedShell();}broadcast();return !failed;}
-    unsigned sessions()const{unsigned count=0;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,ThreadClass,nullptr)))++count;return count;}
+    unsigned sessions()const{unsigned count=0;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr)))++count;return count;}
     void shutdown(){expireHooks();if(data){Config c=*data;c.features=0;publish(c);broadcast();UnmapViewOfFile(data);data=nullptr;}if(mapping){CloseHandle(mapping);mapping=nullptr;}if(module){FreeLibrary(module);module=nullptr;}threads.clear();processes.clear();}
 };
 }

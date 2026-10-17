@@ -1,0 +1,22 @@
+Runtime validation follow-up (2026-10-16)
+
+With the four Windhawk Styler modules disabled, XAML visual-tree subscription
+still returned E_UNEXPECTED on this machine. The pending compatibility scope
+suppresses only the optional composition-diagnostics enumeration during that
+subscription; it makes no registry writes. Its live-shell behavior is unverified.
+
+Engine message-window classes and TAP COM identities now include the embedded
+engine identity, preventing a pinned older DLL from receiving a newer engine's
+messages. Diagnostics cache handles are released after initial subscription and
+a quiet interval, in bounded batches. Error logging is capped at 32 failures.
+The isolated COM-factory test now uses the actual runtime TAP identity.
+
+Windows Code Integrity subsequently blocked the new test DLL (0xc0e90002,
+controller load error 4551; events 3077/3033). Do not disable application control
+to test it. A build trusted by the device policy is required for further live
+validation. The controller now reports policy failures without the native
+Bad Image dialog. Local compilation does not establish runtime compatibility.
+
+The desktop shortcut still targets build/LiquidGlassControl.exe. It was restored
+to the previous installed 0.11.0 executable, with the test feature switches Off.
+No new effect is claimed to work on this device from the isolated tests alone.

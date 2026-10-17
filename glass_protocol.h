@@ -3,12 +3,14 @@
 #include <string>
 namespace glass {
 constexpr DWORD Magic=0x4c474531, Version=2;
-constexpr wchar_t ThreadClass[]=L"LiquidGlass.Engine.Thread.v2";
+inline std::wstring runtimeName(const std::wstring&path){auto at=path.find_last_of(L"\\/");return path.substr(at==std::wstring::npos?0:at+1);}
+inline std::wstring threadClassName(const std::wstring&path){return L"LiquidGlass.Engine.Thread.v2."+runtimeName(path);}
 constexpr wchar_t AttachMessage[]=L"LiquidGlass.Engine.Attach.v2";
 constexpr wchar_t RefreshMessage[]=L"LiquidGlass.Engine.Refresh.v2";
 constexpr wchar_t StatusMessage[]=L"LiquidGlass.Engine.Status.v2";
 constexpr wchar_t AttachAckMessage[]=L"LiquidGlass.Engine.AttachAck.v2";
 constexpr CLSID TapId={0x973361c7,0xcbe9,0x4da4,{0x9c,0x96,0x3b,0x70,0x18,0x3b,0xa1,0x62}};
+inline CLSID runtimeTapId(const std::wstring&path){DWORD hash=2166136261u;for(auto c:runtimeName(path)){hash^=(DWORD)c;hash*=16777619u;}auto id=TapId;id.Data1^=hash;return id;}
 enum Feature:DWORD {Volume=1,Brightness=2,Taskbar=4,Start=8,Notifications=16,Explorer=32,Dock=64};
 struct Config {
     DWORD magic=Magic,version=Version,owner=0;volatile LONG sequence=0;
