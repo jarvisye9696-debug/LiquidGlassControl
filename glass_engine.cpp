@@ -286,6 +286,21 @@ extern "C" __declspec(dllexport) HRESULT WINAPI GlassGraphicsTest(){
         config.blur=40;config.opacity=90;config.tint=2;auto dark=liquid::makeGlass(compositor,config);return dark?S_OK:E_FAIL;
     }catch(...){return winrt::to_hresult();}
 }
+// Exercises connect() inside the loaded engine. A config whose owner process does not exist must be refused and leave no state; the controller's own published config must connect, be idempotent, and release cleanly.
+extern "C" __declspec(dllexport) HRESULT WINAPI GlassConnectTest(){
+    auto idle=[]{AcquireSRWLockShared(&configLock);bool clean=!shared&&!mapping&&!ownerHandle&&!ownerWait&&ownerPid==0;ReleaseSRWLockShared(&configLock);return clean;};
+    if(!idle())return E_FAIL;
+    const DWORD missing=0x7ffffff0;auto name=glass::mappingName(missing);
+    HANDLE fake=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(glass::Config),name.c_str());if(!fake)return HRESULT_FROM_WIN32(GetLastError());
+    if(auto view=(glass::Config*)MapViewOfFile(fake,FILE_MAP_WRITE,0,0,sizeof(glass::Config))){glass::Config c;c.owner=missing;*view=c;UnmapViewOfFile(view);}
+    bool refused=!connect(missing)&&idle();CloseHandle(fake);
+    if(!refused)return E_FAIL;
+    DWORD self=GetCurrentProcessId();
+    if(!connect(self)||!connect(self))return E_FAIL;
+    AcquireSRWLockShared(&configLock);bool connected=shared&&ownerHandle&&ownerWait&&ownerPid==self;ReleaseSRWLockShared(&configLock);
+    AcquireSRWLockExclusive(&configLock);releaseOwnerLocked();ReleaseSRWLockExclusive(&configLock);
+    return connected&&idle()?S_OK:E_FAIL;
+}
 void bootstrap(DWORD owner){if(connect(owner)){
         AcquireSRWLockShared(&sessionsLock);for(auto s:sessions)s->ensureSubscription();ReleaseSRWLockShared(&sessionsLock);
         for(int modern=0;modern<2;++modern)if(GetModuleHandleW(modern?L"Microsoft.Internal.FrameworkUdk.dll":L"Windows.UI.Xaml.dll")&&!injecting[modern].exchange(true)){HANDLE t=CreateThread(nullptr,0,attachFramework,(void*)(INT_PTR)modern,0,nullptr);if(t)CloseHandle(t);else injecting[modern]=false;}

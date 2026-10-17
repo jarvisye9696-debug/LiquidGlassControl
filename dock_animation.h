@@ -23,7 +23,10 @@ class DockAnimation {
 public:
     ~DockAnimation(){stop();}
     bool ready()const{return attached&&!icons.empty();}
-    bool attach(IInspectable*p){try{auto e=winrt::Windows::Foundation::IInspectable{nullptr};winrt::copy_from_abi(e,p);auto r=e.try_as<Element>();if(!r)return false;if(attached&&root.get()==r)return true;if(attached)stop();root=r;
+    bool attach(IInspectable*p){try{auto e=winrt::Windows::Foundation::IInspectable{nullptr};winrt::copy_from_abi(e,p);auto r=e.try_as<Element>();if(!r)return false;if(attached&&root.get()==r)return true;
+        // One taskbar thread hosts one root. A second live root is reported rather than silently taking over the first root's icons.
+        if(attached&&root.get())return false;
+        if(attached)stop();root=r;
         moved=r.PointerMoved([this](auto const&,auto const&args){if(auto r=root.get())point(args.GetCurrentPoint(r).Position().X);});
         exited=r.PointerExited([this](auto const&,auto const&){for(auto&i:icons)if(auto e=i.element.get())try{animate(i,e,1);}catch(...){}});attached=true;return true;
     }catch(...){return false;}}
