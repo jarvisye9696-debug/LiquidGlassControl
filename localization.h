@@ -13,6 +13,10 @@ struct Text{const wchar_t*en;const wchar_t*pl;const wchar_t*vi;};
 inline const Text catalog[]={
 {L"Windows application-control policy blocked the engine. A trusted signed or administrator-approved build is required.",L"Zasady kontroli aplikacji Windows zablokowały silnik. Wymagana jest zaufana podpisana lub zatwierdzona przez administratora wersja.",L"Chính sách kiểm soát ứng dụng Windows đã chặn công cụ. Cần bản dựng có chữ ký đáng tin cậy hoặc được quản trị viên phê duyệt."},
 {L" · Fallback",L" · Materiał zastępczy",L" · Chất liệu dự phòng"},
+{L" · Acrylic (fixed blur)",L" · Akryl (stałe rozmycie)",L" · Acrylic (độ mờ cố định)"},
+{L" · Applied (custom blur)",L" · Zastosowano (własne rozmycie)",L" · Đã áp dụng (độ mờ tùy chỉnh)"},
+{L"Taskbar capsule",L"Kapsuła paska zadań",L"Thanh tác vụ dạng viên"},
+{L"Capsule taskbar",L"Pasek zadań w kapsule",L"Thanh tác vụ dạng viên nổi"},
 {L" · Paused",L" · Wstrzymano",L" · Tạm dừng"},{L"Effects paused by battery saving or system accessibility settings.",L"Efekty wstrzymane przez oszczędzanie energii lub ustawienia ułatwień dostępu.",L"Hiệu ứng tạm dừng do tiết kiệm pin hoặc cài đặt trợ năng hệ thống."},
 {L"Dock hover animation",L"Animacja Dock",L"Hoạt ảnh Dock"},
 {L"Smart taskbar hide (maximized or overlapping)",L"Inteligentne ukrywanie paska (maksymalizacja lub zasłonięcie)",L"Tự ẩn thanh tác vụ (phóng to hoặc che khuất)"},

@@ -1,4 +1,4 @@
-param([string]$Compiler, [ValidatePattern('^[A-Za-z0-9.-]+\.exe$')][string]$OutputName = 'LiquidGlassControl.exe', [string]$WinrtInclude)
+param([string]$Compiler, [ValidatePattern('^[A-Za-z0-9.-]+\.exe$')][string]$OutputName = 'LiquidGlassControl.exe', [string]$WinrtInclude, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 if (-not $Compiler) {
     $found = Get-Command clang++.exe -ErrorAction SilentlyContinue
@@ -7,10 +7,12 @@ if (-not $Compiler) {
         $Compiler = 'C:\Program Files\Windhawk\Compiler\bin\clang++.exe'
     } else { throw 'Install a MinGW clang++ toolchain, or build CMakeLists.txt using Visual Studio.' }
 }
-$outputDir = Join-Path $PSScriptRoot 'build'
+# Candidates pass -OutputDirectory so a new build never overwrites the desktop target.
+$buildDir = Join-Path $PSScriptRoot 'build'
+$outputDir = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { $buildDir }
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $engineIncludes = @()
-if (-not $WinrtInclude -and (Test-Path (Join-Path $outputDir 'winrt\include\winrt\Microsoft.UI.Xaml.h'))) { $WinrtInclude = Join-Path $outputDir 'winrt\include' }
+if (-not $WinrtInclude -and (Test-Path (Join-Path $buildDir 'winrt\include\winrt\Microsoft.UI.Xaml.h'))) { $WinrtInclude = Join-Path $buildDir 'winrt\include' }
 if ($WinrtInclude) { $engineIncludes = @('-I' + [IO.Path]::GetFullPath($WinrtInclude)) }
 $hookObjects = @()
 foreach ($unit in @('buffer','hook','trampoline','hde/hde64')) {
