@@ -100,7 +100,7 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     std::atomic<LONG> notification{S_FALSE};
     void notify(HRESULT hr){if(notification.exchange(hr)!=hr)report(hr);}
     void unregister(InstanceHandle h){if(cache&&h)cache->Unregister(h);}
-    bool wantsSubscription(){if(!cache&&compatibilityReports.load()>=8192)return false;glass::Config c;auto state=snapshot(c);if(state==Read::Transient)return subscribed.load();if(state!=Read::Ok)return false;DWORD mask=host==0?(glass::Taskbar|glass::Volume|glass::Brightness|glass::Dock|glass::Explorer):host==1?glass::Start:host==2?glass::Notifications:glass::Explorer;return (c.features&mask)!=0;}
+    bool wantsSubscription(){if(!cache&&compatibilityReports.load()>=8192)return false;glass::Config c;auto state=snapshot(c);if(state==Read::Transient)return subscribed.load();if(state!=Read::Ok)return false;DWORD mask=host==0?(glass::Taskbar|glass::Volume|glass::Brightness|glass::Dock|glass::Explorer|glass::Capsule):host==1?glass::Start:host==2?glass::Notifications:glass::Explorer;return (c.features&mask)!=0;}
     static LRESULT CALLBACK windowProc(HWND h,UINT msg,WPARAM w,LPARAM l){
         auto t=(Thread*)GetWindowLongPtrW(h,GWLP_USERDATA);
         if(msg==WM_NCCREATE){t=(Thread*)((CREATESTRUCTW*)l)->lpCreateParams;SetWindowLongPtrW(h,GWLP_USERDATA,(LONG_PTR)t);}
