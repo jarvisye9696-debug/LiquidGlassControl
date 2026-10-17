@@ -29,6 +29,7 @@ void localize(){
       {CompatText,L"Windows 11 x64 · 独立引擎，无需安装 Windhawk。\r\n通过 XAML 诊断接口调整已有材质面板，不重排系统布局。\r\nWindows 更新或其他主题工具可能影响兼容性。\r\n\r\n资源管理器支持现代 XAML 区域与窗口背景；\r\n经典文件列表等自绘内容区可能仍不透明。\r\n其他应用的玻璃效果取决于其绘制方式。\r\n\r\n升级时仅恢复本程序保存的旧 Windhawk 配置；需要管理员授权。",L"Windows 11 x64. Standalone engine; Windhawk is not required.\r\nUses XAML diagnostics to style existing material panels, preserving layout.\r\nWindows updates and other theme tools can affect compatibility.\r\n\r\nExplorer supports modern XAML regions and window backdrop;\r\nclassic file lists may remain opaque.\r\nOther applications depend on their own rendering.\r\n\r\nUpgrade restores this app's saved Windhawk settings only;\r\nadministrator approval is required for that migration."},
       {AboutText,L"Liquid Glass 0.11.1\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass 0.11.1\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
       {DockHeading,L"Dock 悬停动画",L"Dock hover animation"},{DockToggle,L"Dock 悬停动画",L"Dock hover animation"},{AutoHideHeading,L"任务栏智能隐藏（最大化或遮挡时）",L"Smart taskbar hide (maximized or overlapping)"},{AutoHideToggle,L"任务栏智能隐藏",L"Smart taskbar hide"},
+      {CapsuleHeading,L"任务栏胶囊",L"Taskbar capsule"},{CapsuleToggle,L"胶囊任务栏",L"Capsule taskbar"},
       {ExitApp,L"还原并退出",L"Restore and exit"}
     };
     for(auto&t:texts)SetWindowTextW(GetDlgItem(mainWindow,t.id),tr(t.zh,t.en));
@@ -62,8 +63,9 @@ void buildUI(){
     compatibility=control(L"STATIC",L"",0,Compatibility,24,346,742,42);
     control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Refresh,24,398,212,36);control(L"BUTTON",L"",BS_DEFPUSHBUTTON|WS_TABSTOP,Apply,250,398,250,36);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Restore,514,398,252,36);note=control(L"STATIC",L"",0,Note,24,454,742,82);
     buildingPage=1;
-    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading,AutoHideHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle,AutoHideToggle};
-    for(int i=0;i<8;++i){int y=108+i*42;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,switches[i],650,y,100,36);SetWindowSubclass(toggle,compactSwitch,3,0);}
+    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading,AutoHideHeading,CapsuleHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle,AutoHideToggle,CapsuleToggle};
+    // Nine rows at 38 px pitch keep the last switch above the native-info block at y=458.
+    for(int i=0;i<9;++i){int y=108+i*38;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,switches[i],650,y,100,36);SetWindowSubclass(toggle,compactSwitch,3,0);}
     nativeInfo=control(L"STATIC",L"",0,NativeInfo,40,458,710,72);
     buildingPage=2;
     settingsTabs=control(WC_TABCONTROLW,L"",tabStyle,SettingsPages,32,112,720,38);tabItem(settingsTabs,5,136);
