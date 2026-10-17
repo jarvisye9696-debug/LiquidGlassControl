@@ -1,14 +1,15 @@
-param([switch]$SkipBuild, [string]$ExecutablePath, [string]$OutputDirectory)
+param([switch]$SkipBuild, [string]$ExecutablePath, [string]$OutputDirectory, [string]$TestExecutablePath)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$version = '0.11.1'
+$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'app_version.h')), '(?m)^#define LG_VERSION "([^"]+)"').Groups[1].Value
+if (-not $version) { throw 'Version missing from app_version.h' }
 $name = "LiquidGlassControl-$version-win11-x64"
 $dist = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'dist' }
 $stage = Join-Path $PSScriptRoot ('build\package-' + [guid]::NewGuid().ToString('N'))
 if ($ExecutablePath) {
     $source = (Resolve-Path -LiteralPath $ExecutablePath).Path
 } elseif (-not $SkipBuild) {
-    & (Join-Path $PSScriptRoot 'build.ps1') -OutputName LiquidGlassControl.release.exe
+    & (Join-Path $PSScriptRoot 'build.ps1') -OutputName LiquidGlassControl.release.exe -BuildTests
     $source = Join-Path $PSScriptRoot 'build\LiquidGlassControl.release.exe'
 } else {
     $source = Join-Path $PSScriptRoot 'build\LiquidGlassControl.exe'
@@ -19,7 +20,11 @@ New-Item -ItemType Directory -Path $dist -Force | Out-Null
 $exe = Join-Path $stage 'LiquidGlassControl.exe'
 Copy-Item -LiteralPath $source -Destination $exe
 # Use a clean folder: the test must not consume the developer's settings or backups.
-$test = Start-Process -FilePath $exe -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
+$testSource = if ($TestExecutablePath) { $TestExecutablePath } else { Join-Path (Split-Path -Parent $source) 'LiquidGlassTests.exe' }
+if (-not (Test-Path -LiteralPath $testSource)) { throw 'Build LiquidGlassTests.exe before packaging.' }
+$testExe = Join-Path $stage 'LiquidGlassTests.exe'
+Copy-Item -LiteralPath $testSource -Destination $testExe
+$test = Start-Process -FilePath $testExe -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
 if (-not $test.WaitForExit(20000)) { throw 'Release self-test timed out.' }
 $test.Refresh()
 if ($test.ExitCode -ne 0) { throw "Release self-test failed: $($test.ExitCode)" }

@@ -8,7 +8,7 @@ License / 许可证: owner's and DK's original contributions use [GPL-3.0-only](
 
 ## English
 
-**0.11.1 experimental — live shell testing is still required.**
+**0.12.0-beta.1 experimental — live shell testing is still required.**
 
 - Liquid Glass controls for taskbar, Start, notifications, Explorer, volume and brightness; no Windhawk runtime required.
 - Separate Dock hover animation and smart taskbar auto-hide switches, off by default.
@@ -19,7 +19,7 @@ License / 许可证: owner's and DK's original contributions use [GPL-3.0-only](
 
 ## 中文
 
-**0.11.1 实验版，系统界面仍需实机验证。**
+**0.12.0-beta.1 实验版，系统界面仍需实机验证。**
 
 - 任务栏、开始菜单、通知中心、资源管理器、音量和亮度玻璃开关，无需 Windhawk 运行时。
 - 新增 Dock 悬停动画和任务栏智能隐藏，默认关闭、单独开启。
@@ -32,5 +32,5 @@ License / 许可证: owner's and DK's original contributions use [GPL-3.0-only](
 
 Contributors / 贡献者：[DK (@domk6966)](https://github.com/domk6966)
 
-0.11.1 imports four Styler LiquidGlass material presets and subscription compatibility hooks. Local builds, isolated self-tests and desktop deployment passed. Notification-center styling is still unconfirmed; capsule tray appearance and restoration need further live checks. CPU, power and memory improvements are not benchmarked. Builds remain unsigned.
-0.11.1 已移植四组 Styler 的 LiquidGlass 材质规则及订阅兼容逻辑。本机构建、自测与桌面部署已通过；通知中心效果仍未确认，胶囊托盘外观及恢复仍需完整实测。CPU、功耗和内存优化尚未进行前后基准测量。当前构建未签名。
+0.12.0-beta.1 imports four Styler LiquidGlass material presets and subscription compatibility hooks. Local builds, isolated self-tests and desktop deployment passed. Notification-center styling is still unconfirmed; capsule tray appearance and restoration need further live checks. CPU, power and memory improvements are not benchmarked. Builds remain unsigned.
+0.12.0-beta.1 已移植四组 Styler 的 LiquidGlass 材质规则及订阅兼容逻辑。本机构建、自测与桌面部署已通过；通知中心效果仍未确认，胶囊托盘外观及恢复仍需完整实测。CPU、功耗和内存优化尚未进行前后基准测量。当前构建未签名。

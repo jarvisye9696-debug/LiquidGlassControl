@@ -25,9 +25,13 @@
 #include "native_osd.h"
 #include "native_switches.h"
 #include "shell_materials.h"
+#ifdef LG_ENABLE_SELF_TEST
 #include "shell_materials_test.h"
+#endif
 #include "full_themes.h"
+#ifdef LG_ENABLE_SELF_TEST
 #include "full_themes_test.h"
+#endif
 
 namespace {
 constexpr wchar_t ClassName[]=L"LiquidGlass.Control";
@@ -201,7 +205,7 @@ void apply(){
 void restoreAll(bool exit){
     if(migrationJob)return;
     setRulesActive(false);restoreWindows();if(!originals.empty())return;
-    if(!autoHide.disable()){message(tr(L"任务栏恢复失败，恢复记录已保留。",L"Taskbar restore failed; recovery record retained."));return;}autoHideOn=dockOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());volumeOn=brightnessOn=explorerOn=false;for(bool&on:shellOn)on=false;applyGlass(false);
+    if(!autoHide.disable()){message(tr(L"任务栏恢复失败，恢复记录已保留。",L"Taskbar restore failed; recovery record retained."));return;}autoHideOn=dockOn=capsuleOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());volumeOn=brightnessOn=explorerOn=false;for(bool&on:shellOn)on=false;applyGlass(false);
     if(migrationNeeded()){exitAfterRestore=exit;migrateLegacy();return;}
     message(tr(L"已还原所有效果。",L"All effects restored."));if(exit)DestroyWindow(mainWindow);
 }
@@ -209,6 +213,7 @@ void combo(HWND h,std::initializer_list<const wchar_t*> labels,int sel){SendMess
 #include "ui_style.h"
 #include "control_ui.h"
 #include "glass_features.h"
+#ifdef LG_ENABLE_SELF_TEST
 int selfTest(){
     bool passed=FindResourceW(nullptr,MAKEINTRESOURCEW(202),RT_RCDATA)!=nullptr;HRESULT graphicsResult=E_FAIL;
     // Exercise the embedded engine and its COM factory without attaching to
@@ -294,6 +299,7 @@ int selfTest(){
     if(file!=INVALID_HANDLE_VALUE){WriteFile(file,result,(DWORD)lstrlenA(result),&written,nullptr);char details[80]{};int n=snprintf(details,sizeof(details),"GPU composition test: 0x%08lx\r\n",(unsigned long)graphicsResult);WriteFile(file,details,n,&written,nullptr);CloseHandle(file);}else passed=false;
     return passed?0:2;
 }
+#endif
 void show(){
     BOOL systemMotion=!reducedMotion();
     if(!startupPlayed&&startupAnimation&&systemMotion){startupPlayed=true;GetWindowRect(mainWindow,&startupRect);startupTime=GetTickCount64();SetWindowLongPtrW(mainWindow,GWL_EXSTYLE,GetWindowLongPtrW(mainWindow,GWL_EXSTYLE)|WS_EX_LAYERED);SetLayeredWindowAttributes(mainWindow,0,0,LWA_ALPHA);SetWindowPos(mainWindow,nullptr,startupRect.left,startupRect.top+MulDiv(12,dpi,96),0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);ShowWindow(mainWindow,SW_SHOW);SetTimer(mainWindow,4,uiFrameInterval(),nullptr);}else{startupPlayed=true;ShowWindow(mainWindow,SW_SHOW);}SetForegroundWindow(mainWindow);
@@ -351,7 +357,11 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
     if(wcscmp(commandLine,L"--diagnose-shell")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring path=file;path.resize(path.find_last_of(L"\\")+1);return glass::diagnoseShell(path+L"shell-diagnostics.txt");}
     if(wcscmp(commandLine,L"--legacy-restore-all")==0){wchar_t file[32768]{};GetModuleFileNameW(nullptr,file,32768);std::wstring dir=file;dir.resize(dir.find_last_of(L"\\")+1);return restoreLegacy(dir);}
     if(wcscmp(commandLine,L"--close-running")==0){auto old=FindWindowW(ClassName,nullptr);if(!old)return 0;DWORD_PTR result=0;return SendMessageTimeoutW(old,WM_APP+3,0,0,SMTO_ABORTIFHUNG,5000,&result)?0:1;}
+#ifdef LG_ENABLE_SELF_TEST
     bool testing=wcscmp(commandLine,L"--self-test")==0;
+#else
+    bool testing=false;
+#endif
     if(*commandLine&&!testing)return 10;
     HANDLE mutex=CreateMutexW(nullptr,FALSE,testing?L"Local\\LiquidGlass.Control.SelfTest":L"Local\\LiquidGlass.Control.SingleInstance");if(!mutex)return 1;
     if(GetLastError()==ERROR_ALREADY_EXISTS){auto old=FindWindowW(ClassName,nullptr);if(old)PostMessageW(old,WM_APP+2,0,0);CloseHandle(mutex);return 0;}
@@ -373,7 +383,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
     // Keep the window inside the monitor work area. Default placement could put its bottom under the taskbar, hiding the lower controls; only the position changes, never the size or the taskbar layout.
     {MONITORINFO mi{};mi.cbSize=sizeof(mi);RECT w{};GetWindowRect(mainWindow,&w);if(GetMonitorInfoW(MonitorFromWindow(mainWindow,MONITOR_DEFAULTTONEAREST),&mi)){int width=w.right-w.left,height=w.bottom-w.top,x=w.left,y=w.top;if(y+height>mi.rcWork.bottom)y=mi.rcWork.bottom-height;if(y<mi.rcWork.top)y=mi.rcWork.top;if(x+width>mi.rcWork.right)x=mi.rcWork.right-width;if(x<mi.rcWork.left)x=mi.rcWork.left;SetWindowPos(mainWindow,nullptr,x,y,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);}}
     buildUI();themeWindow(mainWindow);
-    if(wcscmp(commandLine,L"--self-test")==0){int result=selfTest();DestroyWindow(mainWindow);for(auto&icon:appIcons)if(icon.second)DestroyIcon(icon.second);destroyFonts();DeleteObject(background);CloseHandle(mutex);CoUninitialize();return result;}
+#ifdef LG_ENABLE_SELF_TEST
+    if(testing){int result=selfTest();DestroyWindow(mainWindow);for(auto&icon:appIcons)if(icon.second)DestroyIcon(icon.second);destroyFonts();DeleteObject(background);CloseHandle(mutex);CoUninitialize();return result;}
+#endif
     if(!autoHide.recover(iniPath)){autoHideOn=false;message(tr(L"任务栏恢复失败，恢复记录已保留。",L"Taskbar restore failed; recovery record retained."));}else if(autoHideOn&&!autoHide.enable(mainWindow,iniPath))autoHideOn=false;
     engineReady=engine.initialize(settingsDir());updateNativeInfo();
     if(!engineReady)message(engine.policyBlocked()?tr(L"Windows 应用程序控制策略阻止了引擎，请使用受信任签名或管理员批准的版本。",L"Windows application-control policy blocked the engine. A trusted signed or administrator-approved build is required."):tr(L"独立引擎无法加载，请检查程序所在目录是否可写。",L"Standalone engine could not load. Check that the app folder is writable."));

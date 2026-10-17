@@ -15,9 +15,9 @@ jobs:
       - name: Check version
         shell: pwsh
         run: |
-          $script = Get-Content package.ps1 -Raw
-          $version = [regex]::Match($script, '(?m)^\$version = ''([^'']+)''').Groups[1].Value
-          if (-not $version -or $env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag must match package.ps1 version' }
+          $script = Get-Content app_version.h -Raw
+          $version = [regex]::Match($script, '(?m)^#define LG_VERSION "([^"]+)"').Groups[1].Value
+          if (-not $version -or $env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag must match app_version.h version' }
       - name: Prepare Windows framework headers
         shell: pwsh
         run: ./prepare-winrt.ps1

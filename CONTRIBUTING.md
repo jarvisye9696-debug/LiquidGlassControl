@@ -33,13 +33,13 @@ Requirements: Windows 11 x64, CMake 3.20+, Visual Studio 2022 Build Tools with D
 ./prepare-winrt.ps1
 cmake -S . -B build/cmake -A x64
 cmake --build build/cmake --config Release
-$test = Start-Process build/cmake/Release/LiquidGlassControl.exe -ArgumentList '--self-test' -PassThru -Wait
+$test = Start-Process build/cmake/Release/LiquidGlassTests.exe -ArgumentList '--self-test' -PassThru -Wait
 if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 Get-Content build/cmake/Release/self-test.txt
 ./package.ps1 -ExecutablePath build/cmake/Release/LiquidGlassControl.exe
 ```
 
-Alternatively, use `./build.ps1` with MinGW clang++ (the installed Windhawk compiler is detected), then `./package.ps1 -SkipBuild`.
+Alternatively, use `./build.ps1 -BuildTests` with MinGW clang++ (the installed Windhawk compiler is detected), then `./package.ps1 -SkipBuild`.
 
 ## Project map
 
