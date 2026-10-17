@@ -8,6 +8,7 @@ namespace glass {
 class Controller {
     HANDLE mapping{};Config*data{};HMODULE module{};HOOKPROC hook{},messageHook{};UINT attach{},refresh{};std::map<DWORD,HHOOK> pendingHooks;
     std::set<DWORD> threads;std::map<DWORD,std::wstring> processes;
+    std::set<DWORD> attemptedThreads;unsigned packagedRounds=0;
     std::wstring dllPath,windowClass;bool failed=false;DWORD loadError=0;
     void trace(const char*stage,DWORD value){if(strcmp(stage,"packaged shell processes")==0)return;auto at=dllPath.find_last_of(L"\\");auto file=dllPath.substr(0,at+1)+L"glass-controller.log";HANDLE h=CreateFileW(file.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,0,nullptr);if(h!=INVALID_HANDLE_VALUE){char line[120]{};int n=snprintf(line,sizeof(line),"%s: %lu\r\n",stage,(unsigned long)value);DWORD written=0;WriteFile(h,line,n,&written,nullptr);CloseHandle(h);}}
     std::wstring process(DWORD id){auto found=processes.find(id);if(found!=processes.end())return found->second;wchar_t path[32768]{};DWORD size=32768;HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,id);if(p){QueryFullProcessImageNameW(p,0,path,&size);CloseHandle(p);}std::wstring value=path;auto at=value.find_last_of(L"\\");if(at!=std::wstring::npos)value.erase(0,at+1);return processes[id]=value;}
@@ -21,10 +22,15 @@ class Controller {
     static BOOL CALLBACK child(HWND h,LPARAM param){auto self=(Controller*)param;wchar_t name[128]{};GetClassNameW(h,name,128);if(wcsstr(name,L"Xaml")||wcsstr(name,L"DesktopWindow"))self->attachWindow(h);return TRUE;}
     static BOOL CALLBACK window(HWND h,LPARAM param){auto self=(Controller*)param;if(self->target(h)){self->attachWindow(h);EnumChildWindows(h,child,param);}return TRUE;}
     static BOOL CALLBACK threadWindow(HWND h,LPARAM param){auto self=(Controller*)param;self->attachWindow(h);return TRUE;}
-    void attachThread(DWORD tid){if(threads.count(tid)||pendingHooks.count(tid)||pendingHooks.size()>=32)return;HHOOK h=SetWindowsHookExW(WH_GETMESSAGE,messageHook,module,tid);if(!h)return;if(!PostThreadMessageW(tid,attach,GetCurrentProcessId(),0)){UnhookWindowsHookEx(h);return;}pendingHooks[tid]=h;auto window=FindWindowW(L"LiquidGlass.Control",nullptr);if(window)SetTimer(window,5,2200,nullptr);}
+    void attachThread(DWORD tid){if(threads.count(tid)||pendingHooks.count(tid)||attemptedThreads.count(tid)||pendingHooks.size()>=32)return;attemptedThreads.insert(tid);HHOOK h=SetWindowsHookExW(WH_GETMESSAGE,messageHook,module,tid);if(!h){trace("message hook error",GetLastError());return;}if(!PostThreadMessageW(tid,attach,GetCurrentProcessId(),0)){trace("thread queue unavailable",GetLastError());UnhookWindowsHookEx(h);return;}pendingHooks[tid]=h;auto window=FindWindowW(L"LiquidGlass.Control",nullptr);if(window)SetTimer(window,5,2200,nullptr);}
     void discoverPackagedShell(){
         std::set<DWORD> ids;HANDLE p=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);if(p!=INVALID_HANDLE_VALUE){PROCESSENTRY32W e{};e.dwSize=sizeof(e);if(Process32FirstW(p,&e))do{bool start=(data->features&Start)&&_wcsicmp(e.szExeFile,L"StartMenuExperienceHost.exe")==0;bool notifications=(data->features&Notifications)&&(_wcsicmp(e.szExeFile,L"ShellExperienceHost.exe")==0||_wcsicmp(e.szExeFile,L"ShellHost.exe")==0);if(start||notifications)ids.insert(e.th32ProcessID);}while(Process32NextW(p,&e));CloseHandle(p);}
-        trace("packaged shell processes",(DWORD)ids.size());if(ids.empty())return;HANDLE t=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);if(t==INVALID_HANDLE_VALUE)return;THREADENTRY32 e{};e.dwSize=sizeof(e);if(Thread32First(t,&e))do{if(ids.count(e.th32OwnerProcessID)){EnumThreadWindows(e.th32ThreadID,threadWindow,reinterpret_cast<LPARAM>(this));attachThread(e.th32ThreadID);}}while(Thread32Next(t,&e));CloseHandle(t);
+        trace("packaged shell processes",(DWORD)ids.size());if(ids.empty())return;HANDLE t=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);if(t==INVALID_HANDLE_VALUE)return;
+        std::map<DWORD,std::vector<DWORD>> candidates;size_t longest=0;THREADENTRY32 e{};e.dwSize=sizeof(e);
+        if(Thread32First(t,&e))do{if(ids.count(e.th32OwnerProcessID)){auto&list=candidates[e.th32OwnerProcessID];list.push_back(e.th32ThreadID);longest=std::max(longest,list.size());EnumThreadWindows(e.th32ThreadID,threadWindow,reinterpret_cast<LPARAM>(this));}}while(Thread32Next(t,&e));CloseHandle(t);
+        // Share each bounded batch between processes. A host with many idle
+        // worker queues must not consume every slot before the panel's host.
+        for(size_t index=0;index<longest&&pendingHooks.size()<32;++index)for(auto&candidate:candidates)if(index<candidate.second.size())attachThread(candidate.second[index]);
     }
 public:
     ~Controller(){shutdown();}
@@ -44,7 +50,7 @@ public:
     bool available()const{return data&&hook;}
     bool policyBlocked()const{return loadError==4551||loadError==577||loadError==1260;}
     void acknowledge(DWORD tid){auto i=pendingHooks.find(tid);if(i!=pendingHooks.end()){UnhookWindowsHookEx(i->second);pendingHooks.erase(i);threads.insert(tid);}}
-    void expireHooks(){for(auto&i:pendingHooks)UnhookWindowsHookEx(i.second);pendingHooks.clear();}
+    void expireHooks(bool retry=false){for(auto&i:pendingHooks)UnhookWindowsHookEx(i.second);pendingHooks.clear();if(retry&&data&&data->features&&++packagedRounds<5)discoverPackagedShell();}
     const std::wstring&runtimePath()const{return dllPath;}
     bool factoryTest(){
         using GetFactory=HRESULT(WINAPI*)(REFCLSID,REFIID,void**);
@@ -58,7 +64,7 @@ public:
     HRESULT graphicsTest(){using Test=HRESULT(WINAPI*)();auto test=module?(Test)GetProcAddress(module,"GlassGraphicsTest"):nullptr;return test?test():E_NOINTERFACE;}
     void publish(Config c){if(!data)return;c=normalize(c);c.owner=GetCurrentProcessId();InterlockedIncrement(&data->sequence);MemoryBarrier();data->features=c.features;data->opacity=c.opacity;data->radius=c.radius;data->tint=c.tint;data->blur=c.blur;data->economy=c.economy;MemoryBarrier();InterlockedIncrement(&data->sequence);}
     void broadcast(){if(!data)return;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr))){DWORD_PTR value=0;SendMessageTimeoutW(h,refresh,0,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,200,&value);}}
-    bool discover(){if(!data)return false;failed=false;threads.clear();processes.clear();if(data->features){EnumWindows(window,reinterpret_cast<LPARAM>(this));discoverPackagedShell();}broadcast();return !failed;}
+    bool discover(){if(!data)return false;failed=false;threads.clear();processes.clear();attemptedThreads.clear();packagedRounds=0;if(data->features){EnumWindows(window,reinterpret_cast<LPARAM>(this));discoverPackagedShell();}broadcast();return !failed;}
     unsigned sessions()const{unsigned count=0;HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,windowClass.c_str(),nullptr)))++count;return count;}
     void shutdown(){expireHooks();if(data){Config c=*data;c.features=0;publish(c);broadcast();UnmapViewOfFile(data);data=nullptr;}if(mapping){CloseHandle(mapping);mapping=nullptr;}if(module){FreeLibrary(module);module=nullptr;}threads.clear();processes.clear();}
 };

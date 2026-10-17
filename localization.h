@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <string>
 #include <map>
+#include <array>
+#include <algorithm>
 namespace l10n {
 enum Language {English,Simplified,Traditional,Polish,Vietnamese,Count};
 inline Language current=English;
@@ -11,6 +13,7 @@ inline Language read(const std::wstring&path){wchar_t code[32]{};GetPrivateProfi
 inline void save(const std::wstring&path){WritePrivateProfileStringW(L"UI",L"Language",codes[current],path.c_str());}
 struct Text{const wchar_t*en;const wchar_t*pl;const wchar_t*vi;};
 inline const Text catalog[]={
+{L" · Applied",L" · Zastosowano",L" · Đã áp dụng"},
 {L"Windows application-control policy blocked the engine. A trusted signed or administrator-approved build is required.",L"Zasady kontroli aplikacji Windows zablokowały silnik. Wymagana jest zaufana podpisana lub zatwierdzona przez administratora wersja.",L"Chính sách kiểm soát ứng dụng Windows đã chặn công cụ. Cần bản dựng có chữ ký đáng tin cậy hoặc được quản trị viên phê duyệt."},
 {L" · Fallback",L" · Materiał zastępczy",L" · Chất liệu dự phòng"},
 {L" · Acrylic (fixed blur)",L" · Akryl (stałe rozmycie)",L" · Acrylic (độ mờ cố định)"},
@@ -84,11 +87,16 @@ inline const Text catalog[]={
 {L"Cannot create tray icon; exiting.",L"Nie można utworzyć ikony w zasobniku. Zamykanie.",L"Không tạo được biểu tượng khay hệ thống; đang thoát."}
 };
 inline void replace(std::wstring&s,const wchar_t*from,const wchar_t*to){size_t at=0;while((at=s.find(from,at))!=std::wstring::npos){s.replace(at,wcslen(from),to);at+=wcslen(to);}}
+inline const Text* findTranslation(const wchar_t*english){
+    // Index existing literals, without duplicating strings or allocating map nodes.
+    static const auto index=[] {std::array<const Text*,sizeof(catalog)/sizeof(catalog[0])> sorted{};for(size_t i=0;i<sorted.size();++i)sorted[i]=&catalog[i];std::sort(sorted.begin(),sorted.end(),[](auto a,auto b){return wcscmp(a->en,b->en)<0;});return sorted;}();
+    auto found=std::lower_bound(index.begin(),index.end(),english,[](auto entry,const wchar_t*key){return wcscmp(entry->en,key)<0;});return found!=index.end()&&wcscmp((*found)->en,english)==0?*found:nullptr;
+}
 inline const wchar_t* translate(const wchar_t*zh,const wchar_t*en){
     if(current==English)return en;if(current==Simplified)return zh;
     if(current==Traditional){static std::map<std::wstring,std::wstring> cache;auto i=cache.find(zh);if(i!=cache.end())return i->second.c_str();int n=LCMapStringEx(L"zh-TW",LCMAP_TRADITIONAL_CHINESE,zh,-1,nullptr,0,nullptr,nullptr,0);std::wstring text;if(n>0){text.resize(n);LCMapStringEx(L"zh-TW",LCMAP_TRADITIONAL_CHINESE,zh,-1,&text[0],n,nullptr,nullptr,0);text.pop_back();}else text=zh;
-        replace(text,L"任務欄",L"工作列");replace(text,L"資源管理器",L"檔案總管");replace(text,L"窗口",L"視窗");replace(text,L"設置",L"設定");replace(text,L"托盤",L"系統匣");replace(text,L"默認",L"預設");replace(text,L"接口",L"介面");replace(text,L"禁用",L"停用");return cache.emplace(zh,std::move(text)).first->second.c_str();}
-    for(auto&t:catalog)if(wcscmp(en,t.en)==0)return current==Polish?t.pl:t.vi;
+        replace(text,L"任務欄",L"工作列");replace(text,L"資源管理器",L"檔案總管");replace(text,L"窗口",L"視窗");replace(text,L"設置",L"設定");replace(text,L"托盤",L"系統匣");replace(text,L"默認",L"預設");replace(text,L"接口",L"介面");replace(text,L"禁用",L"停用");replace(text,L"程序",L"程式");replace(text,L"軟件",L"軟體");replace(text,L"鼠標",L"滑鼠");replace(text,L"內存",L"記憶體");return cache.emplace(zh,std::move(text)).first->second.c_str();}
+    if(auto entry=findTranslation(en))return current==Polish?entry->pl:entry->vi;
     return en;
 }
 }

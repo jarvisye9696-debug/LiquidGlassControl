@@ -9,6 +9,9 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
+      - name: Verify translation coverage
+        shell: pwsh
+        run: ./verify-localization.ps1
       - name: Check version
         shell: pwsh
         run: |

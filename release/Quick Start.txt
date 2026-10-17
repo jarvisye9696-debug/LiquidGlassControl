@@ -7,6 +7,7 @@ Windows 11 x64 · Portable / 免安装
 3. 首次默认英文，在 Settings → General → Interface language 选择 English / 简体中文 / 繁體中文 / Polski / Tiếng Việt。
 4. 系统玻璃页独立开关音量、亮度、任务栏、开始菜单、通知中心和资源管理器。
 5. Dock 动画和任务栏智能隐藏默认关闭，可在系统玻璃页单独开启。
+   胶囊任务栏为独立实验性开关，不移动系统图标；通知中心效果仍待确认。
    设置 → 玻璃效果：分别调整模糊强度、着色、圆角和省电回退。
 6. 关闭窗口后保留托盘。卸载前使用 设置 → 关于 → 还原并退出。
 
@@ -24,6 +25,7 @@ English
 3. Language: Settings → General → Interface language. Your choice is saved.
 4. System glass: independent volume, brightness, taskbar, Start, notification and Explorer switches.
 5. Dock hover and smart taskbar hide are separate, off-by-default switches.
+   Taskbar capsule is a separate experimental switch; it does not move icons. Notification-center styling is unconfirmed.
    Settings → Glass: blur, tint, corners and battery-friendly fallback.
 6. Closing keeps the app in the tray. Before removal, use Settings → About → Restore and exit.
 
