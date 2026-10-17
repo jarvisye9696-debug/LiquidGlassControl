@@ -45,21 +45,40 @@ UINT refreshMsg{},attachMsg{};std::atomic<bool> injecting[2]{};
 const std::wstring&runtimePath(){static std::wstring path=[](){wchar_t value[32768]{};GetModuleFileNameW(selfModule,value,32768);return std::wstring(value);}();return path;}
 const std::wstring&threadClass(){static auto name=glass::threadClassName(runtimePath());return name;}
 class Session;SRWLOCK sessionsLock=SRWLOCK_INIT;std::vector<Session*> sessions;
-bool snapshot(glass::Config&c){AcquireSRWLockShared(&configLock);bool valid=false;if(shared)for(int i=0;i<3;++i){LONG s=shared->sequence;if(s&1)continue;MemoryBarrier();c=*shared;MemoryBarrier();if(s==shared->sequence){valid=c.magic==glass::Magic&&c.version==glass::Version;break;}}if(ownerHandle&&WaitForSingleObject(ownerHandle,0)==WAIT_OBJECT_0)c.features=0;ReleaseSRWLockShared(&configLock);return valid;}
+// Ok: consistent config. Transient: the controller is mid-publish or the read tore; keep current surfaces and retry. Invalid: no usable config.
+enum class Read {Ok,Transient,Invalid};
+Read snapshot(glass::Config&c){
+    AcquireSRWLockShared(&configLock);Read result=Read::Invalid;
+    if(shared){result=Read::Transient;for(int i=0;i<16;++i){LONG s=shared->sequence;if(s&1){YieldProcessor();continue;}MemoryBarrier();c=*shared;MemoryBarrier();if(s==shared->sequence){result=c.magic==glass::Magic&&c.version==glass::Version?Read::Ok:Read::Invalid;break;}}}
+    // The controller exited: all effects must be restored regardless of what the mapping still holds.
+    if(ownerHandle&&WaitForSingleObject(ownerHandle,0)==WAIT_OBJECT_0){c.features=0;result=Read::Ok;}
+    ReleaseSRWLockShared(&configLock);return result;
+}
 void refreshWindows(){HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,threadClass().c_str(),nullptr))){DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid==GetCurrentProcessId())PostMessageW(h,refreshMsg,0,0);}}
 void CALLBACK ownerEnded(void*,BOOLEAN){refreshWindows();}
 void report(HRESULT hr,DWORD feature=0){auto h=FindWindowW(L"LiquidGlass.Control",nullptr);DWORD pid=0;if(h)GetWindowThreadProcessId(h,&pid);if(pid==ownerPid)PostMessageW(h,RegisterWindowMessageW(glass::StatusMessage),feature,(LPARAM)hr);}
+// Caller holds configLock exclusively. Releases every owner-scoped resource; safe on a partially connected state.
+void releaseOwnerLocked(){
+    if(ownerWait){UnregisterWaitEx(ownerWait,INVALID_HANDLE_VALUE);ownerWait=nullptr;}
+    if(ownerHandle){CloseHandle(ownerHandle);ownerHandle=nullptr;}
+    if(shared){UnmapViewOfFile(shared);shared=nullptr;}
+    if(mapping){CloseHandle(mapping);mapping=nullptr;}
+    ownerPid=0;
+}
 bool connect(DWORD pid){
     AcquireSRWLockExclusive(&configLock);
-    if(shared&&ownerPid==pid){ReleaseSRWLockExclusive(&configLock);return true;}
-    if(shared&&ownerHandle&&WaitForSingleObject(ownerHandle,0)!=WAIT_OBJECT_0){ReleaseSRWLockExclusive(&configLock);return false;}
-    if(ownerWait){UnregisterWaitEx(ownerWait,INVALID_HANDLE_VALUE);ownerWait=nullptr;}if(ownerHandle){CloseHandle(ownerHandle);ownerHandle=nullptr;}if(shared){UnmapViewOfFile(shared);shared=nullptr;}if(mapping){CloseHandle(mapping);mapping=nullptr;}
-    auto name=glass::mappingName(pid);mapping=OpenFileMappingW(FILE_MAP_READ,FALSE,name.c_str());if(!mapping){ReleaseSRWLockExclusive(&configLock);return false;}
-    shared=(glass::Config*)MapViewOfFile(mapping,FILE_MAP_READ,0,0,sizeof(glass::Config));
-    if(!shared||shared->magic!=glass::Magic||shared->version!=glass::Version||shared->owner!=pid){if(shared)UnmapViewOfFile(shared);shared=nullptr;CloseHandle(mapping);mapping=nullptr;ReleaseSRWLockExclusive(&configLock);return false;}
-    ownerPid=pid;refreshMsg=RegisterWindowMessageW(glass::RefreshMessage);attachMsg=RegisterWindowMessageW(glass::AttachMessage);
-    ownerHandle=OpenProcess(SYNCHRONIZE,FALSE,pid);if(!ownerHandle){ReleaseSRWLockExclusive(&configLock);return false;}
-    RegisterWaitForSingleObject(&ownerWait,ownerHandle,ownerEnded,nullptr,INFINITE,WT_EXECUTEONLYONCE);
+    // A live owner keeps its configuration; an ended owner must be replaced.
+    if(shared&&ownerHandle&&WaitForSingleObject(ownerHandle,0)==WAIT_TIMEOUT){bool same=ownerPid==pid;ReleaseSRWLockExclusive(&configLock);return same;}
+    releaseOwnerLocked();
+    // Acquire every resource first; publish the connection only after all succeed, so a failure leaves no half-connected state and a later attempt can retry.
+    auto name=glass::mappingName(pid);HANDLE m=OpenFileMappingW(FILE_MAP_READ,FALSE,name.c_str());
+    if(!m){ReleaseSRWLockExclusive(&configLock);return false;}
+    auto view=(glass::Config*)MapViewOfFile(m,FILE_MAP_READ,0,0,sizeof(glass::Config));
+    if(!view||view->magic!=glass::Magic||view->version!=glass::Version||view->owner!=pid){if(view)UnmapViewOfFile(view);CloseHandle(m);ReleaseSRWLockExclusive(&configLock);return false;}
+    HANDLE owner=OpenProcess(SYNCHRONIZE,FALSE,pid);HANDLE wait=nullptr;
+    if(!owner||!RegisterWaitForSingleObject(&wait,owner,ownerEnded,nullptr,INFINITE,WT_EXECUTEONLYONCE)){if(owner)CloseHandle(owner);UnmapViewOfFile(view);CloseHandle(m);ReleaseSRWLockExclusive(&configLock);return false;}
+    mapping=m;shared=view;ownerHandle=owner;ownerWait=wait;ownerPid=pid;
+    refreshMsg=RegisterWindowMessageW(glass::RefreshMessage);attachMsg=RegisterWindowMessageW(glass::AttachMessage);
     // Diagnostics owns COM objects whose callbacks can outlive the hook.
     // Pin this small DLL until the shell process exits; all element references
     // and overrides are released on Off / controller exit.
@@ -70,14 +89,14 @@ struct Saved {unsigned index{};bool local=false;Ptr<IInspectable> value;};
 struct Node {std::vector<const wchar_t*> imported;Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;DWORD appliedSignature=0;bool composition=false,fallback=false;};
 class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     std::atomic<ULONG> refs{1};Ptr<IUnknown> site;Ptr<IXamlDiagnostics> diag;Ptr<IVisualTreeService2> service;Ptr<CacheRelease> cache;
-    struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::set<InstanceHandle> release;ULONGLONG lastMutation=0;bool updating=false;bool taskbarPanel=false;liquid::DockAnimation dock;~Thread(){for(auto&n:nodes)for(auto&w:n.second.watchers)w.second();}};
+    struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::set<InstanceHandle> release;ULONGLONG lastMutation=0;bool updating=false;bool taskbarPanel=false;unsigned retries{};liquid::DockAnimation dock;~Thread(){for(auto&n:nodes)for(auto&w:n.second.watchers)w.second();}};
     std::map<DWORD,Thread*> threads;SRWLOCK lock=SRWLOCK_INIT;bool modern=false;int host=0;std::atomic<HRESULT> lastError{S_OK};std::atomic<unsigned> writes{0};
     std::atomic<bool> subscribed{false},subscriptionWorker{false};
     std::atomic<unsigned> compatibilityReports{0};
     std::atomic<LONG> notification{S_FALSE};
     void notify(HRESULT hr){if(notification.exchange(hr)!=hr)report(hr);}
     void unregister(InstanceHandle h){if(cache&&h)cache->Unregister(h);}
-    bool wantsSubscription(){if(!cache&&compatibilityReports.load()>=8192)return false;glass::Config c;if(!snapshot(c))return false;DWORD mask=host==0?(glass::Taskbar|glass::Volume|glass::Brightness|glass::Dock|glass::Explorer):host==1?glass::Start:host==2?glass::Notifications:glass::Explorer;return (c.features&mask)!=0;}
+    bool wantsSubscription(){if(!cache&&compatibilityReports.load()>=8192)return false;glass::Config c;auto state=snapshot(c);if(state==Read::Transient)return subscribed.load();if(state!=Read::Ok)return false;DWORD mask=host==0?(glass::Taskbar|glass::Volume|glass::Brightness|glass::Dock|glass::Explorer):host==1?glass::Start:host==2?glass::Notifications:glass::Explorer;return (c.features&mask)!=0;}
     static LRESULT CALLBACK windowProc(HWND h,UINT msg,WPARAM w,LPARAM l){
         auto t=(Thread*)GetWindowLongPtrW(h,GWLP_USERDATA);
         if(msg==WM_NCCREATE){t=(Thread*)((CREATESTRUCTW*)l)->lpCreateParams;SetWindowLongPtrW(h,GWLP_USERDATA,(LONG_PTR)t);}
@@ -85,6 +104,7 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
             if(msg==WM_APP+4){SetTimer(h,8,30,nullptr);return 0;}if(msg==WM_TIMER&&w==8){if(t->session->subscriptionWorker)return 0;KillTimer(h,8);t->session->update(*t);return 0;}
             if(msg==refreshMsg){if(t->session->subscriptionWorker)SetTimer(h,10,100,nullptr);else t->session->update(*t);return 0;}
             if(msg==WM_TIMER&&w==10){if(!t->session->subscriptionWorker){KillTimer(h,10);t->session->update(*t);}return 0;}
+            if(msg==WM_TIMER&&w==11){KillTimer(h,11);t->session->update(*t);return 0;}
             if(msg==WM_APP+2)return (LRESULT)t->session->writes.load();
             if(msg==WM_APP+3)return (LRESULT)t->session->lastError.load();
             if(msg==WM_NCDESTROY){auto s=t->session;AcquireSRWLockExclusive(&s->lock);s->threads.erase(GetCurrentThreadId());ReleaseSRWLockExclusive(&s->lock);SetWindowLongPtrW(h,GWLP_USERDATA,0);delete t;}
@@ -182,7 +202,11 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
         }
         if(applied){n.appliedSignature=signature;for(auto property:{L"Background",L"Fill",L"BorderBrush",L"Stroke"})if(n.saved.count(property)&&!n.watchers.count(property))try{auto p=from(h);auto&t=thread();auto callback=liquid::watch(p.p,modern,property,[&t,h]{if(t.updating)return;auto node=t.nodes.find(h);if(node!=t.nodes.end()){node->second.appliedSignature=0;PostMessageW(t.window,WM_APP+4,0,0);}});if(callback)n.watchers.emplace(property,std::move(callback));}catch(...){trace("watch property",winrt::to_hresult());}}
     }
-    void update(Thread&t){if(t.updating)return;t.updating=true;glass::Config c;if(!snapshot(c))c.features=0;if(!(c.features&glass::Dock)||c.economy)t.dock.stop();
+    void update(Thread&t){if(t.updating)return;glass::Config c;Read state=snapshot(c);
+        // A torn read keeps the current surfaces (no flicker while a slider is dragged). Retries are bounded; a controller that stays unreadable is treated as gone and effects are restored.
+        if(state==Read::Transient){if(t.retries<4){++t.retries;SetTimer(t.window,11,25,nullptr);return;}state=Read::Invalid;}
+        t.retries=0;if(state!=Read::Ok)c.features=0;
+        t.updating=true;if(!(c.features&glass::Dock)||c.economy)t.dock.stop();
         for(auto i=t.nodes.begin();i!=t.nodes.end();){Ptr<IInspectable> p;if(i->second.weak) i->second.weak->Resolve(__uuidof(IInspectable),p.put());if(!p){for(auto&w:i->second.watchers)w.second();i=t.nodes.erase(i);continue;}
             InstanceHandle h=0;if(SUCCEEDED(diag->RegisterInstance(p.p,&h))){apply(i->second,h,c);releaseLater(t,h);}
             // Keep only weak descriptors for inactive surfaces. Another switch
@@ -223,7 +247,7 @@ public:
                 if(!imported.empty()&&surface==glass::NoSurface)surface=host==1?glass::StartPlate:host==2?glass::NotificationPlate:host==3?glass::ExplorerPlate:glass::TaskbarRoot;
                 if(surface!=glass::NoSurface){auto p=std::move(target);Ptr<IWeakReferenceSource> source;if(p&&SUCCEEDED(p->QueryInterface(__uuidof(IWeakReferenceSource),reinterpret_cast<void**>(source.put())))){
                     Node n;n.imported=std::move(imported);n.surface=surface;source->GetWeakReference(n.weak.put());auto old=t.nodes.find(element.Handle);if(old!=t.nodes.end()){t.updating=true;restore(old->second,element.Handle);t.updating=false;if(!old->second.saved.empty()){releaseLater(t,element.Handle);return S_OK;}}t.nodes[element.Handle]=std::move(n);
-                    glass::Config c;if(snapshot(c)){t.updating=true;apply(t.nodes[element.Handle],element.Handle,c);t.updating=false;}
+                    glass::Config c;if(snapshot(c)==Read::Ok){t.updating=true;apply(t.nodes[element.Handle],element.Handle,c);t.updating=false;}
                 }}releaseLater(t,element.Handle);releaseLater(t,relation.Parent);
             }else if(mutation==Remove){auto i=t.nodes.find(element.Handle);if(i!=t.nodes.end()){t.updating=true;restore(i->second,element.Handle);t.updating=false;for(auto&w:i->second.watchers)w.second();t.nodes.erase(i);}releaseLater(t,element.Handle);}
         }catch(...){lastError=E_FAIL;}return S_OK;
