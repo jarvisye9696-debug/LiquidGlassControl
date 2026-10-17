@@ -60,7 +60,7 @@ Read snapshot(glass::Config&c){
 }
 void refreshWindows(){HWND h=nullptr;while((h=FindWindowExW(HWND_MESSAGE,h,threadClass().c_str(),nullptr))){DWORD pid=0;GetWindowThreadProcessId(h,&pid);if(pid==GetCurrentProcessId())PostMessageW(h,refreshMsg,0,0);}}
 void CALLBACK ownerEnded(void*,BOOLEAN){refreshWindows();}
-void report(HRESULT hr,DWORD feature=0){auto h=FindWindowW(L"LiquidGlass.Control",nullptr);DWORD pid=0;if(h)GetWindowThreadProcessId(h,&pid);if(pid==ownerPid)PostMessageW(h,RegisterWindowMessageW(glass::StatusMessage),feature,(LPARAM)hr);}
+void report(HRESULT hr,DWORD feature=0){note(L"report feature="+std::to_wstring(feature)+L" hr="+std::to_wstring((long)hr)+L" exe="+hostExe());auto h=FindWindowW(L"LiquidGlass.Control",nullptr);DWORD pid=0;if(h)GetWindowThreadProcessId(h,&pid);if(pid==ownerPid)PostMessageW(h,RegisterWindowMessageW(glass::StatusMessage),feature,(LPARAM)hr);}
 // Caller holds configLock exclusively. Releases every owner-scoped resource; safe on a partially connected state.
 void releaseOwnerLocked(){
     if(ownerWait){UnregisterWaitEx(ownerWait,INVALID_HANDLE_VALUE);ownerWait=nullptr;}
@@ -90,7 +90,7 @@ bool connect(DWORD pid){
     ReleaseSRWLockExclusive(&configLock);return true;
 }
 struct Saved {unsigned index{};bool local=false;Ptr<IInspectable> value;};
-struct Node {std::vector<const wchar_t*> imported;Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;DWORD appliedSignature=0;bool composition=false,fallback=false;};
+struct Node {std::vector<const wchar_t*> imported;Ptr<IWeakReference> weak;glass::Surface surface=glass::NoSurface;std::map<std::wstring,Saved> saved;std::map<std::wstring,std::function<void()>> watchers;DWORD appliedSignature=0;bool composition=false,fallback=false;HRESULT lastReport=S_FALSE;bool reported=false;HRESULT lastCapsule=E_NOINTERFACE;bool capsuleReported=false;};
 class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
     std::atomic<ULONG> refs{1};Ptr<IUnknown> site;Ptr<IXamlDiagnostics> diag;Ptr<IVisualTreeService2> service;Ptr<CacheRelease> cache;
     struct Thread {Session*session{};HWND window{};std::map<InstanceHandle,Node> nodes;std::set<InstanceHandle> release;ULONGLONG lastMutation=0;bool updating=false;bool taskbarPanel=false;unsigned retries{};liquid::DockAnimation dock;~Thread(){for(auto&n:nodes)for(auto&w:n.second.watchers)w.second();}};
@@ -147,7 +147,7 @@ class Session final:public IObjectWithSite,public IVisualTreeServiceCallback2 {
         unsigned index=0;if(!save(n,h,prop,index)){if(required)report(E_INVALIDARG,glass::feature(n.surface));return false;}
         InstanceHandle v=0;if(value&&FAILED(diag->RegisterInstance(value,&v)))return false;
         HRESULT hr=service->SetProperty(h,v,index);trace("set property",hr);if(v)unregister(v);if(FAILED(hr)){lastError=hr;if(required)report(hr,glass::feature(n.surface));}else{++writes;// S_OK: custom composition blur applied. S_FALSE: system acrylic, whose blur strength cannot be set by this engine.
-if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::feature(n.surface)&&n.surface!=glass::StartOverlay&&n.surface!=glass::TaskbarOverlay&&n.surface!=glass::StartClear&&n.surface!=glass::NotificationClear&&n.surface!=glass::ExplorerClear)report(n.composition?S_OK:S_FALSE,glass::feature(n.surface));}return SUCCEEDED(hr);
+if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::feature(n.surface)&&n.surface!=glass::StartOverlay&&n.surface!=glass::TaskbarOverlay&&n.surface!=glass::StartClear&&n.surface!=glass::NotificationClear&&n.surface!=glass::ExplorerClear){n.lastReport=n.composition?S_OK:S_FALSE;n.reported=true;report(n.lastReport,glass::feature(n.surface));}}return SUCCEEDED(hr);
     }
     void restore(Node&n,InstanceHandle h){for(auto i=n.saved.begin();i!=n.saved.end();){auto&v=i->second;HRESULT hr=S_OK;InstanceHandle old=0;
             if(v.local){if(v.value)hr=diag->RegisterInstance(v.value.p,&old);if(SUCCEEDED(hr))hr=service->SetProperty(h,old,v.index);if(old)unregister(old);}else hr=service->ClearProperty(h,v.index);
@@ -202,24 +202,35 @@ if(required&&!(n.surface==glass::TaskbarFill&&thread().taskbarPanel)&&glass::fea
     }
     // Capsule: the visible taskbar fill becomes a centered pill with fully rounded ends. Only the fill's margins and corner radii change; no layout element is resized and the window area is untouched. Without measurable content the fill is left as it is.
     void applyCapsule(Node&n,InstanceHandle h,const glass::Config&c){
-        if(!(c.features&glass::Capsule)||modern)return;
-        auto p=from(h);if(!p)return;winrt::Windows::Foundation::IInspectable obj{nullptr};winrt::copy_from_abi(obj,p.p);
-        auto fill=obj.try_as<winrt::Windows::UI::Xaml::FrameworkElement>();if(!fill)return;
-        auto host=winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetParent(fill).try_as<winrt::Windows::UI::Xaml::FrameworkElement>();if(!host)return;
-        double width=host.ActualWidth(),height=host.ActualHeight();if(width<=0||height<=0)return;
-        double left=width,right=0;int count=winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetChildrenCount(host);
-        for(int i=0;i<count;++i){auto child=winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetChild(host,i).try_as<winrt::Windows::UI::Xaml::FrameworkElement>();
-            if(!child||child==fill||child.Visibility()!=winrt::Windows::UI::Xaml::Visibility::Visible||child.ActualWidth()<=0)continue;
-            auto origin=child.TransformToVisual(host).TransformPoint(winrt::Windows::Foundation::Point{0,0});
-            left=std::min(left,(double)origin.X);right=std::max(right,(double)origin.X+child.ActualWidth());}
-        if(right<=left)return;
-        double pill=std::min(width,(right-left)+16.0),margin=(width-pill)/2,radius=std::min(height,pill)/2;
-        typed(n,h,L"Margin",L"Thickness",std::to_wstring(margin)+L",0,"+std::to_wstring(margin)+L",0");
-        typed(n,h,L"RadiusX",L"Double",std::to_wstring(radius));typed(n,h,L"RadiusY",L"Double",std::to_wstring(radius));
+        if(!(c.features&glass::Capsule))return;
+        // Success is reported only when the geometry is written; every failure reports E_NOINTERFACE so the switch never claims a pill it did not create.
+        HRESULT result=E_NOINTERFACE;
+        if(!modern){
+            auto p=from(h);winrt::Windows::Foundation::IInspectable obj{nullptr};if(p)winrt::copy_from_abi(obj,p.p);
+            auto fill=obj.try_as<winrt::Windows::UI::Xaml::FrameworkElement>();
+            auto host=fill?winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetParent(fill).try_as<winrt::Windows::UI::Xaml::FrameworkElement>():winrt::Windows::UI::Xaml::FrameworkElement{nullptr};
+            if(host&&host.ActualWidth()>0&&host.ActualHeight()>0){
+                double width=host.ActualWidth(),height=host.ActualHeight();
+                double left=width,right=0;int count=winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetChildrenCount(host);
+                for(int i=0;i<count;++i){auto child=winrt::Windows::UI::Xaml::Media::VisualTreeHelper::GetChild(host,i).try_as<winrt::Windows::UI::Xaml::FrameworkElement>();
+                    if(!child||child==fill||child.Visibility()!=winrt::Windows::UI::Xaml::Visibility::Visible||child.ActualWidth()<=0)continue;
+                    auto origin=child.TransformToVisual(host).TransformPoint(winrt::Windows::Foundation::Point{0,0});
+                    left=std::min(left,(double)origin.X);right=std::max(right,(double)origin.X+child.ActualWidth());}
+                if(right>left){
+                    double pill=std::min(width,(right-left)+16.0),margin=(width-pill)/2,radius=std::min(height,pill)/2;
+                    typed(n,h,L"Margin",L"Thickness",std::to_wstring(margin)+L",0,"+std::to_wstring(margin)+L",0");
+                    typed(n,h,L"RadiusX",L"Double",std::to_wstring(radius));typed(n,h,L"RadiusY",L"Double",std::to_wstring(radius));
+                    result=S_OK;
+                }
+            }
+        }
+        n.lastCapsule=result;n.capsuleReported=true;report(result,glass::Capsule);
     }
     void apply(Node&n,InstanceHandle h,const glass::Config&c){
         if(n.surface==glass::DockRoot||n.surface==glass::DockIcon){auto&t=thread();if(!(c.features&glass::Dock)||c.economy){t.dock.stop();return;}auto p=from(h);if(p){if(n.surface==glass::DockRoot){if(!t.dock.attach(p.p))report(E_NOINTERFACE,glass::Dock);}else t.dock.add(p.p);if(t.dock.ready())report(S_OK,glass::Dock);}return;}
-        if(!glass::active(n.surface,c.features)){restore(n,h);return;}DWORD signature=1|(c.opacity<<1)|(c.radius<<8)|(c.tint<<13)|(c.economy?1u<<15:0)|(c.blur<<16)|((c.features&glass::Capsule)?1u<<24:0)|((c.features&glass::Taskbar)?1u<<25:0);if(n.appliedSignature==signature)return;
+        if(!glass::active(n.surface,c.features)){restore(n,h);return;}DWORD signature=1|(c.opacity<<1)|(c.radius<<8)|(c.tint<<13)|(c.economy?1u<<15:0)|(c.blur<<16)|((c.features&glass::Capsule)?1u<<24:0)|((c.features&glass::Taskbar)?1u<<25:0);
+        // Unchanged parameters are not written again, but the controller may have cleared its status after a rediscovery; repeat the last result so status matches the live surface.
+        if(n.appliedSignature==signature){if(n.reported)report(n.lastReport,glass::feature(n.surface));if(n.capsuleReported&&(c.features&glass::Capsule))report(n.lastCapsule,glass::Capsule);return;}
         // Capsule-only: the material is removed, the geometry remains. Otherwise the geometry is reset before the material and capsule are applied again.
         if(n.surface==glass::TaskbarFill&&!(c.features&glass::Taskbar)){restore(n,h);applyCapsule(n,h,c);n.appliedSignature=signature;return;}
         if(n.surface==glass::TaskbarFill)restoreNamed(n,h,{L"Margin",L"RadiusX",L"RadiusY"});
