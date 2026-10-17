@@ -40,7 +40,7 @@ enum {Language=101,Refresh,Apply,Restore,Pause,Scope,Material,Corners,List=113,S
     NativeInfo=162,VolumeHeading=166,BrightnessHeading,
     VolumeOn=180,VolumeOff,BrightnessOn,BrightnessOff,SettingsPages=190,LanguageLabel,StartupAnimation,MotionText,CompatText,AboutText,ColorThemeLabel,ColorTheme,
     TaskbarToggle=210,StartToggle,NotificationToggle,TaskbarHeading,StartHeading,NotificationHeading,TaskbarHint,StartHint,NotificationHint,
-    ExplorerToggle=230,ExplorerHeading,OpacityLabel,OpacitySlider,RadiusLabel,RadiusSlider,TintLabel,TintCombo,BatteryFriendly,EffectNote,EffectValue,DockToggle,DockHeading,AutoHideToggle,AutoHideHeading,BlurLabel,BlurSlider,CapsuleToggle,CapsuleHeading};
+    ExplorerToggle=230,ExplorerHeading,OpacityLabel,OpacitySlider,RadiusLabel,RadiusSlider,TintLabel,TintCombo,BatteryFriendly,EffectNote,EffectValue,DockToggle,DockHeading,AutoHideToggle,AutoHideHeading,BlurLabel,BlurSlider};
 HWND mainWindow{}, language{}, scope{}, material{}, corners{}, list{}, status{}, note{};
 HFONT font{}; HBRUSH background{}; NOTIFYICONDATAW tray{};
 bool enabled=false,busy=false; UINT dpi=96;
@@ -48,7 +48,7 @@ std::map<HWND,RECT> controlLayout;
 HWINEVENTHOOK windowEvents{};unsigned attributeWrites=0;std::set<HWND> pendingWindows;bool windowScanPending=false;
 bool volumeOn=false,brightnessOn=false,startupAnimation=true,startupPlayed=false;ULONGLONG startupTime=0;RECT startupRect{};
 HWND settingsTabs{};int settingsPage=0,buildingSettings=-1;std::vector<HWND> settingsControls[3];std::map<std::wstring,HICON> appIcons;
-glass::Controller engine;glass::Config glassConfig;bool explorerOn=false,dockOn=false,capsuleOn=false,autoHideOn=false,batteryFriendly=true;taskbar_hide::Controller autoHide;HANDLE migrationJob{};HPOWERNOTIFY powerNotification{},acNotification{};bool engineReady=false;
+glass::Controller engine;glass::Config glassConfig;bool explorerOn=false,dockOn=false,autoHideOn=false,batteryFriendly=true;taskbar_hide::Controller autoHide;HANDLE migrationJob{};HPOWERNOTIFY powerNotification{},acNotification{};bool engineReady=false;
 DWORD confirmedMaterials=0,failedMaterials=0,pausedFeatures=0,fallbackMaterials=0;
 constexpr GUID PowerSavingStatus={0xe00958c0,0xc213,0x4ace,{0xac,0x77,0xfe,0xcc,0xed,0x2e,0xee,0xa5}};
 void applyGlass(bool discover=true);
@@ -86,10 +86,10 @@ bool shellBackupExists(){for(int i=0;i<3;++i)if(full_themes::pending(i,settingsD
 void updateNativeInfo(){
     bool pending=migrationJob!=nullptr;
     if(nativeInfo)SetWindowTextW(nativeInfo,pending?tr(L"正在恢复旧版主题，请稍候……",L"Restoring the previous version's theme..."):tr(L"独立材质引擎 · 不需要 Windhawk · 保留系统布局\r\n设置 → 玻璃效果：调整着色、透明感、圆角与省电。",L"Standalone materials · No Windhawk required · System layout preserved\r\nSettings > Glass: tint, opacity, corners and power saving."));
-    int ids[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle,CapsuleToggle};bool states[]={volumeOn,brightnessOn,shellOn[0],shellOn[1],shellOn[2],explorerOn,dockOn,capsuleOn};
-    for(int i=0;i<8;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&engineReady&&!migrationNeeded());InvalidateRect(h,nullptr,FALSE);}
-    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading,CapsuleHeading};const wchar_t*zh[]={L"音量提示",L"亮度提示",L"任务栏",L"开始菜单",L"通知中心与日历",L"资源管理器",L"Dock 悬停动画",L"任务栏胶囊"};const wchar_t*en[]={L"Volume indicator",L"Brightness indicator",L"Taskbar",L"Start menu",L"Notification center and calendar",L"File Explorer",L"Dock hover animation",L"Taskbar capsule"};
-    for(int i=0;i<8;++i){DWORD bit=1u<<i;std::wstring text=tr(zh[i],en[i]);if(states[i])text+=(pausedFeatures&bit)?tr(L" · 已暂停",L" · Paused"):(failedMaterials&bit)?tr(L" · 未生效",L" · Not applied"):(fallbackMaterials&bit)?tr(L" · 亚克力（模糊固定）",L" · Acrylic (fixed blur)"):(confirmedMaterials&bit)?(i>=6?tr(L" · 已应用",L" · Applied"):tr(L" · 已应用（自定义模糊）",L" · Applied (custom blur)")):tr(L" · 等待连接",L" · Connecting");SetWindowTextW(GetDlgItem(mainWindow,headings[i]),text.c_str());}
+    int ids[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle};bool states[]={volumeOn,brightnessOn,shellOn[0],shellOn[1],shellOn[2],explorerOn,dockOn};
+    for(int i=0;i<7;++i){HWND h=GetDlgItem(mainWindow,ids[i]);if(!h)continue;SendMessageW(h,BM_SETCHECK,states[i]?BST_CHECKED:BST_UNCHECKED,0);EnableWindow(h,!pending&&engineReady&&!migrationNeeded());InvalidateRect(h,nullptr,FALSE);}
+    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading};const wchar_t*zh[]={L"音量提示",L"亮度提示",L"任务栏",L"开始菜单",L"通知中心与日历",L"资源管理器",L"Dock 悬停动画"};const wchar_t*en[]={L"Volume indicator",L"Brightness indicator",L"Taskbar",L"Start menu",L"Notification center and calendar",L"File Explorer",L"Dock hover animation"};
+    for(int i=0;i<7;++i){DWORD bit=i==2?(glass::Taskbar|glass::Capsule):1u<<i;std::wstring text=tr(zh[i],en[i]);if(states[i])text+=(pausedFeatures&bit)?tr(L" · 已暂停",L" · Paused"):(failedMaterials&bit)?tr(L" · 未生效",L" · Not applied"):(fallbackMaterials&bit)?tr(L" · 亚克力（模糊固定）",L" · Acrylic (fixed blur)"):((confirmedMaterials&bit)==bit)?(i>=6?tr(L" · 已应用",L" · Applied"):tr(L" · 已应用（自定义模糊）",L" · Applied (custom blur)")):tr(L" · 等待连接",L" · Connecting");SetWindowTextW(GetDlgItem(mainWindow,headings[i]),text.c_str());}
     SendMessageW(GetDlgItem(mainWindow,AutoHideToggle),BM_SETCHECK,autoHideOn?BST_CHECKED:BST_UNCHECKED,0);
     for(int id:{TaskbarHint,StartHint,NotificationHint})SetWindowTextW(GetDlgItem(mainWindow,id),L"");
 }
@@ -209,7 +209,7 @@ void apply(){
 void restoreAll(bool exit){
     if(migrationJob)return;
     setRulesActive(false);restoreWindows();if(!originals.empty())return;
-    if(!autoHide.disable()){message(tr(L"任务栏恢复失败，恢复记录已保留。",L"Taskbar restore failed; recovery record retained."));return;}autoHideOn=dockOn=capsuleOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());volumeOn=brightnessOn=explorerOn=false;for(bool&on:shellOn)on=false;applyGlass(false);
+    if(!autoHide.disable()){message(tr(L"任务栏恢复失败，恢复记录已保留。",L"Taskbar restore failed; recovery record retained."));return;}autoHideOn=dockOn=false;WritePrivateProfileStringW(L"Taskbar",L"AutoHide",L"0",iniPath.c_str());volumeOn=brightnessOn=explorerOn=false;for(bool&on:shellOn)on=false;applyGlass(false);
     if(migrationNeeded()){exitAfterRestore=exit;migrateLegacy();return;}
     message(tr(L"已还原所有效果。",L"All effects restored."));if(exit)DestroyWindow(mainWindow);
 }
@@ -228,6 +228,7 @@ int selfTest(){
     glass::Config invalid;invalid.features=0xffffffff;invalid.opacity=500;invalid.radius=999;invalid.tint=999;auto safe=glass::normalize(invalid);passed=passed&&safe.features==255&&glass::active(glass::TaskbarFill,glass::Capsule)&&glass::active(glass::TaskbarRoot,glass::Capsule)&&!glass::active(glass::TaskbarFill,glass::Dock)&&safe.opacity==90&&safe.radius==28&&safe.tint==2;
     passed=passed&&taskbar_hide::intersects({0,0,100,100},{50,50,120,120})&&!taskbar_hide::intersects({0,0,10,10},{10,10,20,20});
     passed=glass::selfTestSnapshot()&&passed;
+    passed=passed&&glass::unifiedTaskbar(0)==0&&glass::unifiedTaskbar(glass::Taskbar)==(glass::Taskbar|glass::Capsule)&&glass::unifiedTaskbar(glass::Capsule|glass::Dock)==(glass::Taskbar|glass::Capsule|glass::Dock)&&glass::unifiedTaskbar(glass::Start)==glass::Start&&pageControls[1].size()==17;
     passed=passed&&!glass::active(glass::TaskbarAuxiliary,glass::Capsule)&&glass::active(glass::TaskbarAuxiliary,glass::Taskbar)&&glass::feature(glass::TaskbarAuxiliary)==glass::Taskbar;
     passed=passed&&glass::identify(L"BackgroundFill",L"Windows.UI.Xaml.Shapes.Rectangle",0)==glass::TaskbarFill&&glass::identify(L"BackgroundFill",L"Windows.UI.Xaml.Shapes.Rectangle",3)==glass::NoSurface&&glass::identify(L"MyDocument",L"Grid",3)==glass::NoSurface;
     passed=passed&&!glass::active(glass::VolumePlate,glass::Brightness)&&glass::active(glass::BrightnessPlate,glass::Brightness)&&!glass::active(glass::TaskbarFill,glass::Start);
@@ -278,7 +279,7 @@ int selfTest(){
     passed=passed&&font&&headingFont&&actionFont&&!GetDlgItem(mainWindow,MotionText)&&!GetDlgItem(mainWindow,CompatText);
     // Exercise control geometry and font recreation at common monitor DPIs,
     // including a round trip. This does not change the user's display settings.
-    {UINT savedDpi=dpi;for(UINT testDpi:{96u,144u,192u,96u}){dpi=testDpi;resizeControls();for(int languageIndex=0;languageIndex<l10n::Count;++languageIndex){l10n::current=(l10n::Language)languageIndex;localize();for(HWND tab:{tabs,settingsTabs}){RECT client{},last{};GetClientRect(tab,&client);TabCtrl_GetItemRect(tab,TabCtrl_GetItemCount(tab)-1,&last);passed=passed&&last.right<=client.right;}for(int id:{OpacitySlider,BlurSlider,RadiusSlider,CapsuleToggle}){RECT r{};GetWindowRect(GetDlgItem(mainWindow,id),&r);passed=passed&&r.right>r.left&&r.bottom>r.top;}}LOGFONTW lf{};GetObjectW(font,sizeof(lf),&lf);passed=passed&&lf.lfHeight==-MulDiv(15,dpi,96);}dpi=savedDpi;l10n::current=userLanguage;resizeControls();localize();}
+    {UINT savedDpi=dpi;for(UINT testDpi:{96u,144u,192u,96u}){dpi=testDpi;resizeControls();for(int languageIndex=0;languageIndex<l10n::Count;++languageIndex){l10n::current=(l10n::Language)languageIndex;localize();for(HWND tab:{tabs,settingsTabs}){RECT client{},last{};GetClientRect(tab,&client);TabCtrl_GetItemRect(tab,TabCtrl_GetItemCount(tab)-1,&last);passed=passed&&last.right<=client.right;}for(int id:{OpacitySlider,BlurSlider,RadiusSlider,TaskbarToggle}){RECT r{};GetWindowRect(GetDlgItem(mainWindow,id),&r);passed=passed&&r.right>r.left&&r.bottom>r.top;}}LOGFONTW lf{};GetObjectW(font,sizeof(lf),&lf);passed=passed&&lf.lfHeight==-MulDiv(15,dpi,96);}dpi=savedDpi;l10n::current=userLanguage;resizeControls();localize();}
     // Check both persisted backup formats without touching registry settings.
     std::wstring testBackup=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"native-backup-test-"+std::to_wstring(GetCurrentProcessId())+L".bin";
     try{
@@ -332,7 +333,7 @@ LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
         case VolumeOn:volumeOn=!volumeOn;applyGlass();break;
         case BrightnessOn:brightnessOn=!brightnessOn;applyGlass();break;
         case DockToggle:dockOn=!dockOn;applyGlass();break;
-        case CapsuleToggle:capsuleOn=!capsuleOn;applyGlass();break;
+
         case AutoHideToggle:autoHideOn=!autoHideOn;if(autoHideOn){if(!autoHide.enable(mainWindow,iniPath)){autoHideOn=false;autoHide.disable();message(tr(L"自动隐藏无法启用。",L"Auto-hide could not be enabled."));}}else if(!autoHide.disable())message(tr(L"任务栏恢复失败，恢复记录已保留。",L"Taskbar restore failed; recovery record retained."));WritePrivateProfileStringW(L"Taskbar",L"AutoHide",autoHideOn?L"1":L"0",iniPath.c_str());updateNativeInfo();break;
         case ExplorerToggle:explorerOn=!explorerOn;applyGlass();break;
         case TaskbarToggle:case StartToggle:case NotificationToggle:{int kind=LOWORD(w)-TaskbarToggle;shellOn[kind]=!shellOn[kind];applyGlass();break;}
@@ -375,9 +376,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int){
     INITCOMMONCONTROLSEX common{};common.dwSize=sizeof(common);common.dwICC=ICC_TAB_CLASSES|ICC_BAR_CLASSES;InitCommonControlsEx(&common);
     wchar_t path[32768]{};GetModuleFileNameW(nullptr,path,32768);iniPath=path;iniPath=iniPath.substr(0,iniPath.find_last_of(L"\\")+1)+L"settings.ini";
     l10n::current=l10n::read(iniPath);
-    glassConfig.features=GetPrivateProfileIntW(L"Glass",L"Features",0,iniPath.c_str());glassConfig.opacity=GetPrivateProfileIntW(L"Glass",L"Opacity",35,iniPath.c_str());glassConfig.radius=GetPrivateProfileIntW(L"Glass",L"Radius",12,iniPath.c_str());glassConfig.tint=GetPrivateProfileIntW(L"Glass",L"Tint",0,iniPath.c_str());glassConfig.blur=GetPrivateProfileIntW(L"Glass",L"Blur",12,iniPath.c_str());glassConfig=glass::normalize(glassConfig);
+    glassConfig.features=GetPrivateProfileIntW(L"Glass",L"Features",0,iniPath.c_str());glassConfig.opacity=GetPrivateProfileIntW(L"Glass",L"Opacity",35,iniPath.c_str());glassConfig.radius=GetPrivateProfileIntW(L"Glass",L"Radius",12,iniPath.c_str());glassConfig.tint=GetPrivateProfileIntW(L"Glass",L"Tint",0,iniPath.c_str());glassConfig.blur=GetPrivateProfileIntW(L"Glass",L"Blur",12,iniPath.c_str());glassConfig=glass::normalize(glassConfig);glassConfig.features=glass::unifiedTaskbar(glassConfig.features);
     if(migrationNeeded())glassConfig.features=0;
-    dockOn=(glassConfig.features&glass::Dock)!=0;capsuleOn=(glassConfig.features&glass::Capsule)!=0;autoHideOn=GetPrivateProfileIntW(L"Taskbar",L"AutoHide",0,iniPath.c_str())!=0;
+    dockOn=(glassConfig.features&glass::Dock)!=0;autoHideOn=GetPrivateProfileIntW(L"Taskbar",L"AutoHide",0,iniPath.c_str())!=0;
     volumeOn=(glassConfig.features&glass::Volume)!=0;brightnessOn=(glassConfig.features&glass::Brightness)!=0;explorerOn=(glassConfig.features&glass::Explorer)!=0;for(int i=0;i<3;++i)shellOn[i]=(glassConfig.features&(glass::Taskbar<<i))!=0;
     batteryFriendly=GetPrivateProfileIntW(L"Glass",L"BatteryFriendly",1,iniPath.c_str())!=0;startupAnimation=GetPrivateProfileIntW(L"UI",L"StartupAnimation",1,iniPath.c_str())!=0;
     applyColorTheme(GetPrivateProfileIntW(L"UI",L"ColorTheme",0,iniPath.c_str()),false);WNDCLASSEXW c{};c.cbSize=sizeof(c);c.lpfnWndProc=proc;c.hInstance=instance;c.lpszClassName=ClassName;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.hIcon=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);c.hIconSm=(HICON)LoadImageW(instance,MAKEINTRESOURCEW(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);c.hbrBackground=background;

@@ -27,7 +27,7 @@ void localize(){
       {SettingsNote,L"语言、配色和启动动画偏好自动保存。\r\n关闭设置窗口会继续在托盘运行。",L"Language, color and startup animation preferences are saved automatically.\r\nClosing settings keeps the app running in the tray."},
       {AboutText,L"Liquid Glass " LG_VERSION_W L"\r\n独立 Windows 材质引擎，单 EXE 分发。\r\n\r\n事件触发，无后台定时扫描。闲置时不持续重绘。\r\n图标缓存随窗口列表清理；XAML 节点使用弱引用。\r\n电池模式可使用低成本回退材质。\r\n不包含完整光学折射。",L"Liquid Glass " LG_VERSION_W L"\r\nStandalone Windows materials, distributed as one EXE.\r\n\r\nEvent driven, with no periodic background scans or idle repaints.\r\nIcon cache is pruned; XAML nodes use weak references.\r\nOptional low-cost material fallback on battery.\r\nFull optical refraction is not implemented."},
       {DockHeading,L"Dock 悬停动画",L"Dock hover animation"},{DockToggle,L"Dock 悬停动画",L"Dock hover animation"},{AutoHideHeading,L"任务栏智能隐藏（最大化或遮挡时）",L"Smart taskbar hide (maximized or overlapping)"},{AutoHideToggle,L"任务栏智能隐藏",L"Smart taskbar hide"},
-      {CapsuleHeading,L"任务栏胶囊",L"Taskbar capsule"},{CapsuleToggle,L"胶囊任务栏",L"Capsule taskbar"},
+
       {ExitApp,L"还原并退出",L"Restore and exit"}
     };
     for(auto&t:texts)SetWindowTextW(GetDlgItem(mainWindow,t.id),tr(t.zh,t.en));
@@ -63,9 +63,9 @@ void buildUI(){
     compatibility=control(L"STATIC",L"",0,Compatibility,24,346,742,42);
     control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Refresh,24,398,212,36);control(L"BUTTON",L"",BS_DEFPUSHBUTTON|WS_TABSTOP,Apply,250,398,250,36);control(L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,Restore,514,398,252,36);note=control(L"STATIC",L"",0,Note,24,454,742,82);
     buildingPage=1;
-    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading,AutoHideHeading,CapsuleHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle,AutoHideToggle,CapsuleToggle};
-    // Nine rows at 38 px pitch keep the last switch above the native-info block at y=458.
-    for(int i=0;i<9;++i){int y=108+i*38;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,switches[i],650,y,100,36);SetWindowSubclass(toggle,compactSwitch,3,0);}
+    int headings[]={VolumeHeading,BrightnessHeading,TaskbarHeading,StartHeading,NotificationHeading,ExplorerHeading,DockHeading,AutoHideHeading};int switches[]={VolumeOn,BrightnessOn,TaskbarToggle,StartToggle,NotificationToggle,ExplorerToggle,DockToggle,AutoHideToggle};
+    // Eight system-effect rows; taskbar includes the capsule appearance.
+    for(int i=0;i<8;++i){int y=108+i*38;control(L"STATIC",L"",0,headings[i],40,y,590,28);HWND toggle=control(L"BUTTON",L"",BS_AUTOCHECKBOX|WS_TABSTOP,switches[i],650,y,100,36);SetWindowSubclass(toggle,compactSwitch,3,0);}
     nativeInfo=control(L"STATIC",L"",0,NativeInfo,40,458,710,72);
     buildingPage=2;
     settingsTabs=control(WC_TABCONTROLW,L"",tabStyle,SettingsPages,32,112,720,38);tabItem(settingsTabs,3,224);

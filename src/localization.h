@@ -20,8 +20,8 @@ inline const Text catalog[]={
 {L" · Fallback",L" · Materiał zastępczy",L" · Chất liệu dự phòng"},
 {L" · Acrylic (fixed blur)",L" · Akryl (stałe rozmycie)",L" · Acrylic (độ mờ cố định)"},
 {L" · Applied (custom blur)",L" · Zastosowano (własne rozmycie)",L" · Đã áp dụng (độ mờ tùy chỉnh)"},
-{L"Taskbar capsule",L"Kapsuła paska zadań",L"Thanh tác vụ dạng viên"},
-{L"Capsule taskbar",L"Pasek zadań w kapsule",L"Thanh tác vụ dạng viên nổi"},
+
+
 {L" · Paused",L" · Wstrzymano",L" · Tạm dừng"},{L"Effects paused by battery saving or system accessibility settings.",L"Efekty wstrzymane przez oszczędzanie energii lub ustawienia ułatwień dostępu.",L"Hiệu ứng tạm dừng do tiết kiệm pin hoặc cài đặt trợ năng hệ thống."},
 {L"Dock hover animation",L"Animacja Dock",L"Hoạt ảnh Dock"},
 {L"Smart taskbar hide (maximized or overlapping)",L"Inteligentne ukrywanie paska (maksymalizacja lub zasłonięcie)",L"Tự ẩn thanh tác vụ (phóng to hoặc che khuất)"},

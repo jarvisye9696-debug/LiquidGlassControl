@@ -13,6 +13,8 @@ constexpr CLSID TapId={0x973361c7,0xcbe9,0x4da4,{0x9c,0x96,0x3b,0x70,0x18,0x3b,0
 inline CLSID runtimeTapId(const std::wstring&path){DWORD hash=2166136261u;for(auto c:runtimeName(path)){hash^=(DWORD)c;hash*=16777619u;}auto id=TapId;id.Data1^=hash;return id;}
 // Capsule reshapes the taskbar's visible background into a centered pill; unlike the material features it changes the taskbar's visual layout.
 enum Feature:DWORD {Volume=1,Brightness=2,Taskbar=4,Start=8,Notifications=16,Explorer=32,Dock=64,Capsule=128};
+// One taskbar switch owns both material and geometry; accept either legacy bit on load.
+inline DWORD unifiedTaskbar(DWORD features){return (features&(Taskbar|Capsule))?features|Taskbar|Capsule:features;}
 struct Config {
     DWORD magic=Magic,version=Version,owner=0;volatile LONG sequence=0;
     DWORD features=0,opacity=35,radius=12,tint=0,blur=12;BOOL economy=FALSE;

@@ -27,7 +27,7 @@ void pollMigration(){
 }
 void applyGlass(bool discover){
     if(!engineReady||migrationJob||migrationNeeded()){updateNativeInfo();return;}
-    glassConfig.features=(volumeOn?glass::Volume:0)|(brightnessOn?glass::Brightness:0)|(shellOn[0]?glass::Taskbar:0)|(shellOn[1]?glass::Start:0)|(shellOn[2]?glass::Notifications:0)|(explorerOn?glass::Explorer:0)|(dockOn?glass::Dock:0)|(capsuleOn?glass::Capsule:0);
+    glassConfig.features=(volumeOn?glass::Volume:0)|(brightnessOn?glass::Brightness:0)|(shellOn[0]?(glass::Taskbar|glass::Capsule):0)|(shellOn[1]?glass::Start:0)|(shellOn[2]?glass::Notifications:0)|(explorerOn?glass::Explorer:0)|(dockOn?glass::Dock:0);
     fallbackMaterials&=glassConfig.features;confirmedMaterials&=glassConfig.features;failedMaterials=0;KillTimer(mainWindow,6);
     // A rediscovery re-enumerates shell windows, so earlier success reports may describe surfaces that no longer exist (restarted Explorer, closed flyouts). Clear them until the engine reports again.
     if(discover)confirmedMaterials=fallbackMaterials=0;
