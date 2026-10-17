@@ -43,22 +43,32 @@ void destroyFonts(){if(font)DeleteObject(font);if(headingFont)DeleteObject(headi
 #include <cmath>
 enum MotionChannel {kCheck=0,kPress=1,kHover=2,kSelect=3};
 const UINT_PTR kMotionTimer=0x5A1;
-struct Motion {float v[4]{},t[4]{};LARGE_INTEGER last{};bool running=false,painted=false;};
+// Each channel moves from the value it had when its target changed, over its own duration, with an ease-in-out curve. Progress is measured from real time, so the motion does not depend on frame rate.
+struct Motion {float v[4]{},t[4]{},from[4]{};LONGLONG started[4]{};bool running=false,painted=false;};
+inline float channelDuration(int channel){return channel==kHover?0.16f:channel==kPress?0.11f:0.26f;}
+inline float easeInOut(float p){return p<0.5f?4*p*p*p:1-(float)std::pow(-2*p+2,3)/2;}
 inline Motion* motionOf(HWND h){auto mo=(Motion*)GetPropW(h,L"LG.Motion");if(!mo){mo=new Motion();SetPropW(h,L"LG.Motion",(HANDLE)mo);}return mo;}
 // Reduced-motion and high-contrast users get the final state immediately.
 inline bool reducedMotion(){BOOL animations=TRUE;SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION,0,&animations,0);HIGHCONTRASTW contrast{};contrast.cbSize=sizeof(contrast);bool highContrast=SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(contrast),&contrast,0)&&(contrast.dwFlags&HCF_HIGHCONTRASTON);return !animations||highContrast;}
 inline void motionTick(HWND h);
+inline LONGLONG motionNow(){LARGE_INTEGER now{};QueryPerformanceCounter(&now);return now.QuadPart;}
+inline double motionFrequency(){LARGE_INTEGER freq{};QueryPerformanceFrequency(&freq);return (double)freq.QuadPart;}
+// A new target starts from the channel's current value, so a reversal mid-motion continues from where the thumb is.
 inline void setMotion(HWND h,int channel,float target){
-    auto mo=motionOf(h);if(mo->t[channel]==target)return;mo->t[channel]=target;
-    if(reducedMotion()||!mo->painted||!IsWindowVisible(h)){mo->v[channel]=target;InvalidateRect(h,nullptr,FALSE);return;}
-    if(!mo->running){QueryPerformanceCounter(&mo->last);mo->running=true;SetTimer(h,kMotionTimer,16,nullptr);}
+    auto mo=motionOf(h);if(mo->t[channel]==target)return;
+    if(reducedMotion()||!mo->painted||!IsWindowVisible(h)){mo->t[channel]=mo->v[channel]=target;InvalidateRect(h,nullptr,FALSE);return;}
+    mo->from[channel]=mo->v[channel];mo->started[channel]=motionNow();mo->t[channel]=target;
+    if(!mo->running){mo->running=true;SetTimer(h,kMotionTimer,16,nullptr);}
 }
 // Returns true while any channel is still moving. Uses real elapsed time, so a slow frame does not slow the animation down.
 inline bool stepMotion(HWND h){
-    auto mo=motionOf(h);LARGE_INTEGER now{},freq{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&freq);
-    double seconds=(double)(now.QuadPart-mo->last.QuadPart)/(double)freq.QuadPart;mo->last=now;if(seconds>0.05)seconds=0.05;
-    float k=(float)(1-std::exp(-seconds/0.045));bool moving=false;
-    for(int i=0;i<4;++i){mo->v[i]+=(mo->t[i]-mo->v[i])*k;if(std::fabs(mo->t[i]-mo->v[i])<0.004f)mo->v[i]=mo->t[i];else moving=true;}
+    auto mo=motionOf(h);LONGLONG now=motionNow();double freq=motionFrequency();bool moving=false;
+    for(int i=0;i<4;++i){
+        if(mo->v[i]==mo->t[i])continue;
+        float progress=(float)((double)(now-mo->started[i])/freq/channelDuration(i));
+        if(progress>=1.f){mo->v[i]=mo->t[i];continue;}
+        mo->v[i]=mo->from[i]+(mo->t[i]-mo->from[i])*easeInOut(progress<0?0:progress);moving=true;
+    }
     return moving;
 }
 inline void motionTick(HWND h){
@@ -91,7 +101,7 @@ LRESULT CALLBACK compactSwitch(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PT
         auto px=[](int n){return MulDiv(n,dpi,96);};bool active=IsWindowEnabled(h);Motion*mo=motionOf(h);mo->painted=true;
         float check=mo->v[kCheck],press=active?mo->v[kPress]:0.f,hover=active?mo->v[kHover]:0.f;bool on=check>0.5f;
         RECT track={px(2),px(4),px(54),px(32)};COLORREF rest=active?RGB(155,165,181):RGB(200,206,215);COLORREF fill=mix(rest,palette().accent,active?check:0.f);
-        roundFill(dc,track,fill,mix(fill,palette().accent,hover*0.6f),px(28));
+        roundFill(dc,track,fill,mix(fill,palette().accent,hover*0.9f),px(28));
         // The thumb slides along the track and narrows slightly while the pointer is pressed.
         int width=px(22)-(int)(px(3)*press+0.5f),thumbLeft=(int)(px(5)+(px(29)-px(5))*check+0.5f)+(px(22)-width)/2;
         HBRUSH thumb=CreateSolidBrush(RGB(255,255,255));auto oldBrush=SelectObject(dc,thumb);auto oldPen=SelectObject(dc,GetStockObject(NULL_PEN));Ellipse(dc,thumbLeft,px(7),thumbLeft+width,px(29));SelectObject(dc,oldPen);SelectObject(dc,oldBrush);DeleteObject(thumb);
