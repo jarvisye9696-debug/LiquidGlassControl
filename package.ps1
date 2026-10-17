@@ -32,7 +32,7 @@ foreach ($notice in @('LICENSE', 'LICENSING.md', 'CODE-SIGNING.md')) {
 }
 # Corresponding source accompanies the GPL engine, with no local settings/logs.
 $sourceFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object { $_.Extension -in '.cpp','.h','.def','.ps1','.md','.txt' } | ForEach-Object FullName)
-$sourceFiles += @((Join-Path $PSScriptRoot 'assets'),(Join-Path $PSScriptRoot 'third_party'),(Join-Path $PSScriptRoot 'release'))
+$sourceFiles += @((Join-Path $PSScriptRoot 'assets'),(Join-Path $PSScriptRoot 'third_party'),(Join-Path $PSScriptRoot 'release'),(Join-Path $PSScriptRoot 'tests'))
 $sourceFiles += Join-Path $PSScriptRoot 'LICENSE'
 $sourceZip = Join-Path $stage 'LiquidGlass-engine-source.zip'
 Compress-Archive -LiteralPath $sourceFiles -DestinationPath $sourceZip -CompressionLevel Optimal

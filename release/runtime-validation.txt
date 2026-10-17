@@ -1,3 +1,16 @@
+Current 0.11.1 validation (2026-10-16)
+
+Local candidate builds and isolated self-tests passed, including COM factory,
+GPU composition graphs, restoration fixtures and five-language/DPI control checks.
+The desktop executable and extracted engine were verified against the candidate.
+Translation coverage and desktop-free catalog tests passed.
+The user confirmed a visible left taskbar capsule. Further tray geometry changes
+have been deployed, but complete visual, popup and restoration checks remain open.
+Notification center styling remains unconfirmed. Power and memory deltas have not
+been benchmarked. This is an unsigned experimental pre-release.
+
+Historical notes below describe earlier builds, not the current deployment.
+
 Runtime validation follow-up (2026-10-16)
 
 With the four Windhawk Styler modules disabled, XAML visual-tree subscription

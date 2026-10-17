@@ -1,5 +1,41 @@
 # Standalone materials (0.10.1 experimental)
 
+Current development work adds an opt-in taskbar capsule. Unlike material-only
+switches, it changes the background rectangle's margins and radii and clips the
+tray composition visual. It does not move icons, resize shell windows, or change
+the work area. Layout notifications coalesce onto the existing message-thread
+timer; unchanged geometry skips property writes. Disabling the effect restores
+saved properties and the original tray clip. Desktop appearance, popups, and
+restoration still require live validation on the target Windows build.
+
+Packaged-shell bootstrap uses at most 32 pending thread hooks per batch, shared
+between host processes, and at most five batches per discovery. Queue failures
+are logged. This is a bounded attachment attempt, not proof that notification
+center styling works. `--diagnose-shell` writes a read-only window inventory to
+`shell-diagnostics.txt` beside the executable, without collecting window titles.
+
+The controller now handles per-monitor DPI changes from stored logical control
+bounds. Slider rendering retains native input and accessibility; control, page,
+and palette timers stop after motion finishes. High contrast uses system colors
+and disables motion. The self-test exercises control geometry and font recreation
+at 96, 144, and 192 DPI across all five languages; this does not replace visual
+checks on actual monitors or a live high-contrast desktop.
+
+Efficiency changes in the current candidate: smart-hide's debounce timer is
+one-shot; UI accessibility and power preferences refresh on system broadcasts
+instead of every paint; battery animations use a 32 ms frame interval; unchanged
+animation values skip invalidation. Language changes reuse the current window
+and icon list. Translation lookup uses a sorted pointer index, while diagnostic
+deduplication stores bounded hashes instead of whole log strings. Pending XAML
+cache releases drain in bounded batches even during sustained mutations, and
+material update messages coalesce per thread. These reduce specific sources of
+work and retention; CPU, power, and private-byte deltas remain unmeasured.
+
+Run `./verify-localization.ps1` for a desktop-free check of Polish/Vietnamese
+coverage, empty entries, and duplicate keys. Traditional Chinese conversion also
+normalizes common Taiwan UI terms. Coverage checks do not establish text fit;
+five-language visual layout checks remain part of release validation.
+
 `glass_controller.h` extracts the embedded DLL, publishes bounded preferences in a per-controller shared mapping and attaches temporary thread hooks only to selected shell/Explorer windows. Hooks are removed after bootstrap. New effects do not use Windhawk runtime, SDK, mod DLLs or registry settings.
 
 `glass_engine.cpp` hosts COM XAML diagnostics sessions for system XAML and, where available, Explorer WinUI 3. A small allowlist identifies material surfaces. No dimensions, margins, padding, alignment, taskbar position or work area are written. Original local properties are retained; style/theme sources are restored with ClearProperty. Binding-backed properties are skipped. Node tracking uses weak references, removed nodes are discarded, and diagnostics references are released in batches after callbacks.
