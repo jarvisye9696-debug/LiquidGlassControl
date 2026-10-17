@@ -60,7 +60,7 @@ inline HRESULT test(){
     DWORD before{},bytes=4;auto baseline=query(key,L"DisableCompositionDiag",nullptr,nullptr,(BYTE*)&before,&bytes);
     bool ok=true;{Scope scope;ok=SUCCEEDED(scope.status());DWORD type{},value{},size=4;
         ok=ok&&query(key,L"DisableCompositionDiag",nullptr,&type,(BYTE*)&value,&size)==ERROR_SUCCESS&&type==REG_DWORD&&value==1&&size==4;
-        BYTE small=0x5a;size=1;ok=ok&&query(key,L"DisableCompositionDiag",nullptr,nullptr,&small,&size)==ERROR_MORE_DATA&&small==0x5a&&size==4;
+        BYTE shortBuffer=0x5a;size=1;ok=ok&&query(key,L"DisableCompositionDiag",nullptr,nullptr,&shortBuffer,&size)==ERROR_MORE_DATA&&shortBuffer==0x5a&&size==4;
         struct Context{HKEY key;decltype(query) function;LSTATUS expected;DWORD value;bool ok=false;}ctx{key,query,baseline,before};
         HANDLE thread=CreateThread(nullptr,0,[](void*p)->DWORD{auto&c=*(Context*)p;DWORD value{},size=4;auto result=c.function(c.key,L"DisableCompositionDiag",nullptr,nullptr,(BYTE*)&value,&size);c.ok=result==c.expected&&(result!=ERROR_SUCCESS||value==c.value);return 0;},&ctx,0,nullptr);
         if(thread){WaitForSingleObject(thread,INFINITE);CloseHandle(thread);ok=ctx.ok&&ok;}else ok=false;

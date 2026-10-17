@@ -1,6 +1,6 @@
 # Releasing / 发布
 
-The repository and v0.9 preview downloads are public. No open-source license has been selected. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
+The repository and v0.9 preview downloads are public. Imported Styler material data and the modified engine carry GPLv3; preserve the supplied licenses and corresponding engine source in portable packages. Controller UI code has no separately selected license. Workflows create drafts for maintainer review; publishing a release makes its attached downloads public.
 
 1. Merge the intended changes to `main`; confirm Windows CI is green.
 2. Update the version in `package.ps1`, app captions/About and release instructions together. Do not reuse an existing tag.
